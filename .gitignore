@@ -1,6 +1,9 @@
 #macos file
 **/*.DS_Store
 
+#workspace
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
