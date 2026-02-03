@@ -1,8 +1,16 @@
 from pydantic import BaseModel
 
-class CreateUrl(BaseModel):
+class URLModel(BaseModel):
+    brand: str | None
     url: str
 
-class UrlResponse(BaseModel):
+    def __str__(self):
+        return f"brand: {self.brand}, url: {self.url}"
+
+
+class UrlResponseModel(BaseModel):
     key: str
-    url: str | None = None
+    brand: str | None
+    url: str
+    status: str
+    message: str
