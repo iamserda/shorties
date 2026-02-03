@@ -25,7 +25,9 @@ store = {
 def healthz() -> dict:
     return {"status": "alive"}
 
-
+@api_router.get("/displayall")
+def display_all() -> dict:
+    return store
 
 @api_router.get("/redirect/{key}")
 def get_url(key: str) -> dict:
