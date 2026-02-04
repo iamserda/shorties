@@ -142,3 +142,6 @@ example.db
 
 # ignoring secrets file
 .env
+
+# cache
+**/*.ruff_cache

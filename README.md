@@ -51,11 +51,12 @@ To get up and running with Shorties, follow these steps:
     poetry run python src/app/main.py
     ```
 
-5. **Run test with pytest:**
+5. **Run test and lint with pytest and ruff:**
     Further instructions for running the service will be provided in future updates as config is subject to change to be more autonomous for deployment.
     For now, we will use:
     ```sh
     poetry run pytest
+    poetry run ruff check
     ```
 
 ## Contributing
