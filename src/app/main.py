@@ -1,13 +1,15 @@
 from fastapi import FastAPI, APIRouter
-
-from models.main import URLModel, UrlResponseModel
+from pydantic import AnyUrl
+from typing import Optional, Literal
+from models.main import URLRequestModel, UrlResponseModel
 from app.alnumgen import alnum_generator
 # from app.constants import KEY_MAX
 
 
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
-store = {
+shorti_links = {
+    "scap": "https://www.scapital.com",
     "goog": "https://www.google.com",
     "meta": "https://www.facebook.com",
     "twit": "https://www.twitter.com",
@@ -19,18 +21,32 @@ store = {
     "micr": "https://www.microsoft.com",
     "appl": "https://www.apple.com",
 }
+click_event = {}
 
 
-@api_router.get("/healthz")
+@api_router.get("/healthz/")
 def healthz() -> dict:
     return {"status": "alive"}
 
-@api_router.get("/displayall")
-def display_all() -> dict:
-    return store
 
-@api_router.get("/redirect/{key}")
+@api_router.get("/display/")
+def display_all(max_results: Optional[int] = None) -> dict:
+    store = shorti_links
+    if max_results is None or max_results <= 0 or max_results >= len(store):
+        return store
+    else:
+        results = {}
+        for i, (k, v) in enumerate(store.items()):
+            if i >= max_results:
+                break
+            else:
+                results[k] = v
+        return results
+
+
+@api_router.get("/redirect/")
 def get_url(key: str) -> dict:
+    store = shorti_links
     try:
         if not key:
             raise ValueError("Invalid, user did not provide a key.")
@@ -43,7 +59,9 @@ def get_url(key: str) -> dict:
                 "status": "success",
                 "message": f'success: url matching "{key}"  was found!',
             }
-        raise KeyError("failure: this key does not match our records. Verify the key and try again.")
+        else:
+            raise KeyError("failure: this key does not match our records. Verify the key and try again.")
+
     except KeyError as err:
         print(err)  # todo: log error, send failure message, suggestions for retrying.
         return {
@@ -70,32 +88,37 @@ def get_url(key: str) -> dict:
         }
 
 
-@api_router.post("/create")
-def create_url(url_item: URLModel) -> UrlResponseModel:
+@api_router.post("/create/")
+def create_url(url_item: URLRequestModel) -> UrlResponseModel:
+    store = shorti_links
     key = alnum_generator()
+    print(url_item)
     try:
         while key in store:
             key = alnum_generator()
+
         store[key] = url_item
+        new_url_item = UrlResponseModel(
+            key=key,
+            brand=store[key].brand,
+            url=AnyUrl(store[key].url),
+            status="success",
+            message="A key was successfully generated",
+        )
         if key in store:
-            return UrlResponseModel(
-                key=key,
-                brand=store[key].brand,
-                url=store[key].url,
-                status="success",
-                message="A key was successfully generated",
-            )
-        else:
-            return UrlResponseModel(
-                key=key,
-                brand="",
-                url="",
-                status="failure",
-                message="We could not create a new key at this moment. Please try again later!",
-            )
+            return new_url_item
+
+        failed = UrlResponseModel(
+            key=key,
+            brand="",
+            url="",
+            status="failure",
+            message="We could not create a new key at this moment. Please try again later!",
+        )
+        return failed
     except KeyError as err:
         print(err)  # todo: logg
-        pass
+
 
 app.include_router(api_router)
 if __name__ == "__main__":
