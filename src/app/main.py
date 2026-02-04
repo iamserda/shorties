@@ -1,6 +1,6 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from pydantic import AnyUrl
-from typing import Optional, Literal
+from typing import Optional
 from models.main import URLRequestModel, UrlResponseModel
 from app.alnumgen import alnum_generator
 # from app.constants import KEY_MAX
@@ -61,16 +61,13 @@ def get_url(key: str) -> dict:
                 "message": f'success: url matching "{key}"  was found!',
             }
         else:
-            raise KeyError("failure: this key does not match our records. Verify the key and try again.")
+            raise HTTPException(
+                status_code=404, detail="failure: this key does not match our records. Verify the key and try again."
+            )
 
-    except KeyError as err:
+    except HTTPException as err:
         print(err)  # todo: log error, send failure message, suggestions for retrying.
-        return {
-            "key": f"{key}",
-            "url": None,
-            "status": "failure",
-            "message": f"key-not-found-error: {err}",
-        }
+        raise err
     except ValueError as err:
         print(f"invalid-data-error: {err}")  # todo: log error, send failure message, suggestions for retrying.
         return {
@@ -109,16 +106,21 @@ def create_url(url_item: URLRequestModel) -> UrlResponseModel:
         if key in store:
             return new_url_item
 
-        failed = UrlResponseModel(
-            key=key,
-            brand="",
-            url="",
-            status="failure",
-            message="We could not create a new key at this moment. Please try again later!",
+        # failed = UrlResponseModel(
+        #     key=key,
+        #     brand="",
+        #     url="",
+        #     status="failure",
+        #     message="We could not create a new key at this moment. Please try again later!",
+        # )
+        # return failed
+        raise HTTPException(
+            status_code=404,
+            detail="status='failure', message='We could not create a new key at this moment!'",
         )
-        return failed
-    except KeyError as err:
+    except HTTPException as err:
         print(err)  # todo: logg
+        raise err
 
 
 app.include_router(api_router)
