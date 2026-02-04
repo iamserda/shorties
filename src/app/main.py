@@ -8,6 +8,7 @@ from app.alnumgen import alnum_generator
 
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
+api_version = "/v1"
 shorti_links = {
     "scap": "https://www.scapital.com",
     "goog": "https://www.google.com",
@@ -24,12 +25,12 @@ shorti_links = {
 click_event = {}
 
 
-@api_router.get("/healthz/")
+@api_router.get(f"{api_version}/healthz/")
 def healthz() -> dict:
     return {"status": "alive"}
 
 
-@api_router.get("/display/")
+@api_router.get(f"{api_version}/display/")
 def display_all(max_results: Optional[int] = None) -> dict:
     store = shorti_links
     if max_results is None or max_results <= 0 or max_results >= len(store):
@@ -44,7 +45,7 @@ def display_all(max_results: Optional[int] = None) -> dict:
         return results
 
 
-@api_router.get("/redirect/")
+@api_router.get(f"{api_version}/redirect/")
 def get_url(key: str) -> dict:
     store = shorti_links
     try:
@@ -88,7 +89,7 @@ def get_url(key: str) -> dict:
         }
 
 
-@api_router.post("/create/")
+@api_router.post(f"{api_version}/create/")
 def create_url(url_item: URLRequestModel) -> UrlResponseModel:
     store = shorti_links
     key = alnum_generator()
