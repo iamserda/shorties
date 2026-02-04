@@ -139,3 +139,9 @@ dmypy.json
 .idea/
 recipe_client
 example.db
+
+# ignoring secrets file
+.env
+
+# cache
+**/*.ruff_cache
