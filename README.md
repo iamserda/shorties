@@ -51,6 +51,13 @@ To get up and running with Shorties, follow these steps:
     poetry run python src/app/main.py
     ```
 
+5. **Run test with pytest:**
+    Further instructions for running the service will be provided in future updates as config is subject to change to be more autonomous for deployment.
+    For now, we will use:
+    ```sh
+    poetry run pytest
+    ```
+
 ## Contributing
 
 Contributions are welcome and encouraged. If you have ideas for the upcoming twist, architectural improvements, or feature requests, please open an issue or submit a pull request. All contributions should adhere to clean code principles and include relevant documentation and tests where applicable.

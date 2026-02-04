@@ -12,7 +12,6 @@ dependencies = [
     "uvicorn (>=0.40.0,<0.41.0)",
     "redis (>=7.1.0,<8.0.0)",
     "pydantic (>=2.12.5,<3.0.0)",
-    "pytest (>=9.0.2,<10.0.0)"
 ]
 
 [tool.poetry]
@@ -24,3 +23,12 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+[dependency-groups]
+dev = [
+    "ruff (>=0.15.0,<0.16.0)",
+    "black (>=26.1.0,<27.0.0)",
+    "pytest-cov (>=7.0.0,<8.0.0)",
+    "mypy (>=1.19.1,<2.0.0)",
+    "pre-commit (>=4.5.1,<5.0.0)",
+    "pytest (>=9.0.2,<10.0.0)"
+]
