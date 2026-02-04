@@ -22,9 +22,10 @@ To get up and running with Shorties, follow these steps:
 
 1. **Clone the repository:**
     ```sh
-    git clone <placeholder-repo-url>
+    git clone git@github.com:iamserda/shorties.git
     cd shorties
     ```
+
 2. **Install Poetry:**
     - **Linux:**
       ```sh
@@ -35,12 +36,14 @@ To get up and running with Shorties, follow these steps:
       brew install pipx
       pipx install poetry
       ```
+
 3. **Install project dependencies:**
     Ensure you are in the project root (where `pyproject.toml` is located):
     ```sh
     poetry env activate
     poetry install
     ```
+
 4. **Run the application:**
     Further instructions for running the service will be provided in future updates as config is subject to change to be more autonomous for deployment.
     For now, we will use:
