@@ -1,0 +1,28 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: debug-statements
+    -   id: name-tests-test
+
+-   repo: https://github.com/asottile/reorder-python-imports
+    rev: v3.16.0
+    hooks:
+    -   id: reorder-python-imports
+        args: [--py310-plus, --add-import, 'from __future__ import annotations']
+
+-   repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+    -   id: mypy
+        args:  [--pretty, --show-error-codes, --check-untyped-defs]
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.15.0
+  hooks:
+    - id: ruff-check
+      args: [--fix, --exit-non-zero-on-fix]
+    - id: ruff-format

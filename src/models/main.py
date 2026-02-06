@@ -1,14 +1,18 @@
-from pydantic import BaseModel, AnyUrl
-from typing import Optional, Literal
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import AnyUrl
+from pydantic import BaseModel
 
 
 class URLRequestModel(BaseModel):
-    brand: Optional[str] | None = None
-    url: AnyUrl
-    expires_on: Optional[str] | None = None
+    brand: str | None = None
+    url: AnyUrl | str
+    expires_on: str | None = None
     redirect_code: Literal[301, 302] = 302
-    tags: Optional[list[str]] = []
-    notes: Optional[str] | None = None
+    tags: list[str] | None = []
+    notes: str | None = None
 
     def __str__(self):
         return f"brand: {self.brand}, url: {self.url}"
@@ -21,13 +25,13 @@ class URLRequestModel(BaseModel):
 class UrlResponseModel(BaseModel):
     key: str | None = None
     brand: str | None = None
-    url: AnyUrl | str | None = None
+    url: AnyUrl | str
     status: str | None = None
     message: str | None = None
-    expires_on: Optional[str] | None = None
+    expires_on: str | None = None
     redirect_code: Literal[301, 302] = 302
-    tags: Optional[list[str]] = []
-    notes: Optional[str] | None = None
+    tags: list[str] | None = []
+    notes: str | None = None
 
 
 class ShortiLink(BaseModel):
@@ -42,8 +46,8 @@ class ShortiLink(BaseModel):
     redirect_code: Literal[301, 302] = 302
 
     brand: str | None = None
-    tags: Optional[list[str]] = []
-    notes: Optional[str] | None = None
+    tags: list[str] | None = []
+    notes: str | None = None
 
     # time stamps
     created_by_user_id: str | None = None

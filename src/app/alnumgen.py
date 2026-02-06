@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import string
 from random import randint
+
 from app.constants import KEY_MAX
 
-def alnum_generator()->str:
+
+def alnum_generator() -> str:
     alphabet = string.ascii_letters
     alphabet_min = 0
     alphabet_max = len(alphabet) - 1
@@ -41,6 +45,10 @@ if __name__ == "__main__":
     assert isinstance(my_key, str)
     assert len(my_key) == KEY_MAX
     for elem in my_key:
-        valid_characters_set = set(string.ascii_letters).union(set(string.digits))
+        valid_characters_set = set(
+            string.ascii_letters,
+        ).union(set(string.digits))
         if elem not in valid_characters_set:
-            raise ValueError("Error: Key includes invalid values! Key should be regenerated")
+            raise ValueError(
+                "Error: Key includes invalid values! Key should be regenerated",
+            )

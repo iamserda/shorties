@@ -40,7 +40,7 @@ To get up and running with Shorties, follow these steps:
 3. **Install project dependencies:**
     Ensure you are in the project root (where `pyproject.toml` is located):
     ```sh
-    poetry env activate
+    eval $(poetry env activate)
     poetry install
     ```
 

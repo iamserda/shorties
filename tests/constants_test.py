@@ -1,4 +1,7 @@
-from app.constants import KEY_MIN, KEY_MAX
+from __future__ import annotations
+
+from app.constants import KEY_MAX
+from app.constants import KEY_MIN
 
 assert KEY_MAX is not None
 assert KEY_MIN is not None
