@@ -13,7 +13,7 @@ from pydantic import AnyUrl
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
 api_version = "/v1"
-shorti_links: dict[str, dict[str, str]] = {
+shorti_links: dict = {
     "scap": {"brand": "scap", "url": "https://www.scapital.com"},
     "goog": {"brand": "goog", "url": "https://www.google.com"},
     "meta": {"brand": "meta", "url": "https://www.facebook.com"},
@@ -47,7 +47,7 @@ shorti_links: dict[str, dict[str, str]] = {
     "payp": {"brand": "payp", "url": "https://www.paypal.com"},
     "tikt": {"brand": "tikt", "url": "https://www.tiktok.com"},
 }
-click_event: dict[str, dict[str, str]] = {}
+click_event: dict = {}
 
 
 @api_router.get(f"{api_version}/healthz/")
@@ -126,7 +126,9 @@ def create_url(url_item: URLRequestModel) -> UrlResponseModel:
         while key in store:
             key = alnum_generator()
 
-        store[key] = url_item
+        new_brand = url_item.brand
+        new_url = url_item.url
+        store[key] = {"brand": new_brand, "url": new_url}
         new_url_item = UrlResponseModel(
             key=key,
             brand=store[key]["brand"],

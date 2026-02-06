@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 class URLRequestModel(BaseModel):
     brand: str | None = None
-    url: AnyUrl
+    url: AnyUrl | str
     expires_on: str | None = None
     redirect_code: Literal[301, 302] = 302
     tags: list[str] | None = []
@@ -25,7 +25,7 @@ class URLRequestModel(BaseModel):
 class UrlResponseModel(BaseModel):
     key: str | None = None
     brand: str | None = None
-    url: AnyUrl | str | None = None
+    url: AnyUrl | str
     status: str | None = None
     message: str | None = None
     expires_on: str | None = None
