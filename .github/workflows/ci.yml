@@ -1,0 +1,35 @@
+# .github/workflows/ci.yml
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.14", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install deps
+        run: poetry install
+
+      - name: Lint
+        run: poetry run ruff check .
+
+      - name: Format check
+        run: poetry run ruff format --check .
+
+      - name: Tests
+        run: poetry run pytest -q

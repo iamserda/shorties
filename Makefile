@@ -10,19 +10,17 @@ activate:
 activate_venv:
 	poetry env activate
 
-ci: lint typecheck test
-
-fmt format:
-	poetry run ruff format
-
 install:
 	poetry install
 
-lint:
-	poetry run ruff check
-
 ruff:
-	poetry run ruff
+	poetry run pre-commit run ruff
+
+fmt format:
+	poetry run pre-commit run ruff-format
+
+lint:
+	poetry run pre-commit run ruff-check
 
 run:
 	poetry run python src/app/main.py
@@ -31,4 +29,10 @@ test:
 	poetry run pytest -q
 
 typecheck:
-	poetry run mypy --pretty --show-error-codes .
+	poetry run mypy .
+
+precommit: lint format typecheck test
+	poetry run pre-commit run
+
+precommit-all: lint format typecheck test
+	poetry run pre-commit run --all-files

@@ -18,6 +18,8 @@ repos:
     rev: v1.19.1
     hooks:
     -   id: mypy
+        args:  [--pretty, --show-error-codes, --check-untyped-defs]
+
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.15.0
   hooks:
