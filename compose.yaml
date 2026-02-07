@@ -1,0 +1,11 @@
+services:
+  app:
+    image: ubuntu(latest)
+    ports:
+      - 8080:80
+  postgres:
+    image: postgres:18
+    entrypoint: ["docker-entrypoint.sh", "postgres"]
+    command: ["-h", "localhost", "-p", "5432"]
+    environment:
+      POSTGRES_PASSWORD: secret
