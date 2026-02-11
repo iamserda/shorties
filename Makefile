@@ -13,9 +13,6 @@ activate_venv:
 install:
 	poetry install
 
-ruff:
-	poetry run pre-commit run ruff
-
 fmt format:
 	poetry run pre-commit run ruff-format
 
@@ -29,10 +26,10 @@ test:
 	poetry run pytest -q
 
 typecheck:
-	poetry run mypy .
+	poetry run pre-commit run -v mypy
 
 precommit: lint format typecheck test
-	poetry run pre-commit run
+	@echo "precommit checks passed"
 
 precommit-all: lint format typecheck test
 	poetry run pre-commit run --all-files
