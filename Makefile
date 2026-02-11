@@ -1,4 +1,4 @@
-.PHONY: help install test lint fmt format typecheck ci
+.PHONY: help install test lint fmt format typecheck precommit precommit-all
 
 help:
 	@echo "Targets: install, test, lint, fmt, typecheck, ci, activate"
@@ -36,3 +36,10 @@ precommit: lint format typecheck test
 
 precommit-all: lint format typecheck test
 	poetry run pre-commit run --all-files
+
+# Docker
+up:
+	docker compose up
+
+down:
+	docker compose down
