@@ -17,10 +17,6 @@ class URLRequestModel(BaseModel):
     def __str__(self):
         return f"brand: {self.brand}, url: {self.url}"
 
-    # @classmethod
-    # def __dict__(cls):
-    #     return {"brand": cls.brand, "url": cls.url}
-
 
 class UrlResponseModel(BaseModel):
     key: str | None = None
