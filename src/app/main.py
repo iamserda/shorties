@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from app.alnumgen import alnum_generator
+from app.schemas.schemas import URLRequestModel
+from app.schemas.schemas import UrlResponseModel
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import HTTPException
-from models.schemas import URLRequestModel
-from models.schemas import UrlResponseModel
 from pydantic import AnyUrl
-# from app.constants import KEY_MAX
 
 
 app = FastAPI(title="Shorties App")
