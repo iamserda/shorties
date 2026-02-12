@@ -4,8 +4,8 @@ from app.alnumgen import alnum_generator
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import HTTPException
-from models.main import URLRequestModel
-from models.main import UrlResponseModel
+from models.schemas import URLRequestModel
+from models.schemas import UrlResponseModel
 from pydantic import AnyUrl
 # from app.constants import KEY_MAX
 
