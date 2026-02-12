@@ -146,4 +146,4 @@ example.db
 # cache
 **/*.ruff_cache
 **/engineering_notes.md
-db/shorties_datastore.db
+**/*.db

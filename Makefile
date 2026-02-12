@@ -42,10 +42,3 @@ precommit-all:
 	@echo "✅ mypy-typecheck checks passed"
 	@echo "✅ pytest-test checks passed"
 	@echo "✅ precommit(--stage-files-only) checks passed"
-
-# Docker
-up:
-	docker compose up
-
-down:
-	docker compose down

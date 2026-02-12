@@ -6,7 +6,7 @@ from pydantic import AnyUrl
 from pydantic import BaseModel
 
 
-class URLRequestModel(BaseModel):
+class NewUrlSubmissionModel(BaseModel):
     brand: str | None = None
     url: AnyUrl | str
     expires_on: str | None = None
@@ -18,7 +18,11 @@ class URLRequestModel(BaseModel):
         return f"brand: {self.brand}, url: {self.url}"
 
 
-class UrlResponseModel(BaseModel):
+class GetURLRequestModel(BaseModel):
+    key: str
+
+
+class GetUrlResponseModel(BaseModel):
     key: str | None = None
     brand: str | None = None
     url: AnyUrl | str
