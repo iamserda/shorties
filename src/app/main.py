@@ -1,53 +1,38 @@
 from __future__ import annotations
 
+import logging
+import os
+from collections.abc import Sequence
+
 from app.alnumgen import alnum_generator
+from app.db.db import db_engine_factory
+from app.db.models.models import ShortiLink
+from app.schemas.schemas import GetURLRequestModel
+from app.schemas.schemas import GetUrlResponseModel
+from app.schemas.schemas import NewUrlSubmissionModel
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import HTTPException
-from models.schemas import URLRequestModel
-from models.schemas import UrlResponseModel
-from pydantic import AnyUrl
-# from app.constants import KEY_MAX
+from sqlmodel import select
+from sqlmodel import Session
+from sqlmodel import SQLModel
 
+logger = logging.getLogger(__name__)
+
+DATABASE_URL = "sqlite:///src/app/db/SHORTIES_DATABASE.db"
+DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
+db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
+
+if db_engine:
+    SQLModel.metadata.create_all(db_engine)
 
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
-api_version = "/v1"
-shorti_links: dict = {
-    "scap": {"brand": "scap", "url": "https://www.scapital.com"},
-    "goog": {"brand": "goog", "url": "https://www.google.com"},
-    "meta": {"brand": "meta", "url": "https://www.facebook.com"},
-    "twit": {"brand": "twit", "url": "https://www.twitter.com"},
-    "link": {"brand": "link", "url": "https://www.linkedin.com"},
-    "gith": {"brand": "gith", "url": "https://www.github.com"},
-    "redd": {"brand": "redd", "url": "https://www.reddit.com"},
-    "yout": {"brand": "yout", "url": "https://www.youtube.com"},
-    "inst": {"brand": "inst", "url": "https://www.instagram.com"},
-    "micr": {"brand": "micr", "url": "https://www.microsoft.com"},
-    "appl": {"brand": "appl", "url": "https://www.apple.com"},
-    "amaz": {"brand": "amaz", "url": "https://www.amazon.com"},
-    "netf": {"brand": "netf", "url": "https://www.netflix.com"},
-    "spof": {"brand": "spof", "url": "https://www.spotify.com"},
-    "slac": {"brand": "slac", "url": "https://www.slack.com"},
-    "drop": {"brand": "drop", "url": "https://www.dropbox.com"},
-    "adob": {"brand": "adob", "url": "https://www.adobe.com"},
-    "uber": {"brand": "uber", "url": "https://www.uber.com"},
-    "airb": {"brand": "airb", "url": "https://www.airbnb.com"},
-    "tesl": {"brand": "tesl", "url": "https://www.tesla.com"},
-    "nyti": {"brand": "nyti", "url": "https://www.nytimes.com"},
-    "wash": {"brand": "wash", "url": "https://www.washingtonpost.com"},
-    "bbc": {"brand": "bbc", "url": "https://www.bbc.com"},
-    "cnn": {"brand": "cnn", "url": "https://www.cnn.com"},
-    "espn": {"brand": "espn", "url": "https://www.espn.com"},
-    "pint": {"brand": "pint", "url": "https://www.pinterest.com"},
-    "tumblr": {"brand": "tumblr", "url": "https://www.tumblr.com"},
-    "quor": {"brand": "quor", "url": "https://www.quora.com"},
-    "yaho": {"brand": "yaho", "url": "https://www.yahoo.com"},
-    "ebay": {"brand": "ebay", "url": "https://www.ebay.com"},
-    "payp": {"brand": "payp", "url": "https://www.paypal.com"},
-    "tikt": {"brand": "tikt", "url": "https://www.tiktok.com"},
-}
-click_event: dict = {}
+api_version = os.getenv("API_VERSION")
+
+
+if not api_version:
+    api_version = "/v1"
 
 
 @api_router.get(f"{api_version}/healthz/")
@@ -56,42 +41,56 @@ def healthz() -> dict:
 
 
 @api_router.get(f"{api_version}/display/")
-def display_all(max_results: int | None = None) -> dict:
-    store = shorti_links
-    if max_results is None or max_results <= 0 or max_results >= len(store):
-        return store
-    else:
-        results = {}
-        for i, (k, v) in enumerate(store.items()):
-            if i >= max_results:
-                break
-            else:
-                results[k] = v
-        return results
-
-
-@api_router.get(f"{api_version}/redirect/")
-def get_url(key: str) -> dict:
-    store = shorti_links
+def display_all() -> Sequence:
     try:
-        if not key:
+        if not db_engine:
+            raise ValueError("Error with DB Engine!")
+        with Session(db_engine) as session:
+            select_statement = select(ShortiLink)
+            return session.exec(statement=select_statement).all()
+    except Exception as err:
+        print("Error:", err)
+        return []
+
+
+@api_router.get(f"{api_version}/redirect/", status_code=301)
+def get_url(shorti_key: str | dict | GetURLRequestModel) -> GetUrlResponseModel | dict:
+    try:
+        print(shorti_key)
+        if not shorti_key:
             raise ValueError("Invalid, user did not provide a key.")
-        if not isinstance(key, str):
-            raise TypeError(
-                "The key provided is not of a valid type. Key must be a str.",
+
+        if (
+            not isinstance(shorti_key, str)
+            and not isinstance(shorti_key, GetURLRequestModel)
+            and not isinstance(shorti_key, dict)
+        ):
+            raise TypeError("The key provided is not of a valid type.")
+
+        with Session(db_engine) as current_session:
+            if isinstance(shorti_key, GetURLRequestModel):
+                shorti_key = shorti_key.key
+            elif isinstance(shorti_key, dict):
+                shorti_key = shorti_key["shorti_key"]
+
+            select_statement = select(ShortiLink).where(
+                ShortiLink.shorti_key == shorti_key
             )
-        if key in store:
-            return {
-                "key": f"{key}",
-                "url": store.get(key),
-                "status": "success",
-                "message": f'success: url matching "{key}"  was found!',
-            }
-        else:
-            raise HTTPException(
-                status_code=404,
-                detail="failure: this key does not match our records. Verify the key and try again.",
-            )
+            result = current_session.exec(statement=select_statement).all()
+            if result:
+                new_shorti = result[0]
+                return GetUrlResponseModel(
+                    key=new_shorti.shorti_key,
+                    brand=new_shorti.brand,
+                    url=new_shorti.shorti_url,
+                    message=f'success: url matching "{shorti_key}"  was found!',
+                    status="Success!",
+                )
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"message: Request-Failed: 'This key {shorti_key} does not match our records. Verify the key and try again.",
+                )
 
     except HTTPException as err:
         # todo: log error, send failure message, suggestions for retrying.
@@ -101,7 +100,7 @@ def get_url(key: str) -> dict:
         # todo: log error, send failure message, suggestions for retrying.
         print(f"invalid-data-error: {err}")
         return {
-            "key": f"{key}",
+            "key": f"{shorti_key}",
             "url": None,
             "status": "failure",
             "message": f"value-not-found-error: {err}",
@@ -110,7 +109,7 @@ def get_url(key: str) -> dict:
         # todo: log error, send failure message, suggestions for retrying.
         print(f"invalid-data-error: {err}")
         return {
-            "key": f"{key}",
+            "key": f"{shorti_key}",
             "url": None,
             "status": "failure",
             "message": f"type-validity-error: {err}",
@@ -118,42 +117,60 @@ def get_url(key: str) -> dict:
 
 
 @api_router.post(f"{api_version}/create/")
-def create_url(url_item: URLRequestModel) -> UrlResponseModel:
-    store = shorti_links
-    key = alnum_generator()
-    print(url_item)
-    try:
-        while key in store:
-            key = alnum_generator()
-
-        new_brand = url_item.brand
-        new_url = url_item.url
-        store[key] = {"brand": new_brand, "url": new_url}
-        new_url_item = UrlResponseModel(
-            key=key,
-            brand=store[key]["brand"],
-            url=AnyUrl(store[key]["url"]),
-            status="success",
-            message="A key was successfully generated",
-        )
-        if key in store:
-            return new_url_item
-
-        # failed = UrlResponseModel(
-        #     key=key,
-        #     brand="",
-        #     url="",
-        #     status="failure",
-        #     message="We could not create a new key at this moment. Please try again later!",
-        # )
-        # return failed
+def create_url(url_item: NewUrlSubmissionModel) -> Sequence[GetUrlResponseModel]:
+    if url_item is None or not len(url_item.url):
         raise HTTPException(
             status_code=404,
-            detail="status='failure', message='We could not create a new key at this moment!'",
+            detail="Invalid submission, either url or both url and brand are missing!",
         )
-    except HTTPException as err:
-        print(err)  # todo: logg
-        raise err
+
+    if url_item and len(url_item.url) <= 3:
+        raise HTTPException(
+            status_code=404,
+            detail="Invalid submission, missing url. We cannot create a new shorti without a valid url input.",
+        )
+
+    key: str = alnum_generator()
+    new_shorties: list[GetUrlResponseModel] = []
+    try:
+        with Session(db_engine) as session:
+            select_statement = select(ShortiLink).where(ShortiLink.shorti_key == key)
+            result = session.exec(statement=select_statement).all()
+            while result:
+                key = alnum_generator()
+                select_statement = select(ShortiLink).where(
+                    ShortiLink.shorti_key == key
+                )
+                result = session.exec(statement=select_statement).all()
+
+            new_shorti = ShortiLink(
+                shorti_key=key, shorti_url=url_item.url, brand=url_item.brand
+            )
+            session.add(new_shorti)
+            session.commit()
+
+            select_statement = select(ShortiLink).where(ShortiLink.shorti_key == key)
+            shorties: Sequence = session.exec(statement=select_statement).all()
+            if shorties:
+                new_shorties = [
+                    GetUrlResponseModel(
+                        key=shorti.shorti_key,
+                        brand=shorti.brand,
+                        url=shorti.shorti_url,
+                        status="success",
+                        message="A key was successfully generated. We stored your url! You can start using your new short url immediately.",
+                    )
+                    for shorti in shorties
+                ]
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="status='failure', message='We could not create a new key at this moment!'",
+                )
+        return new_shorties
+    except HTTPException as httpErr:
+        logger.exception("HTTPException while creating shorti: %s", httpErr)
+        return new_shorties
 
 
 app.include_router(api_router)
