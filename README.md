@@ -34,7 +34,7 @@ make run # poetry run python src/app/main.py
 # quality checks
 make lint # poetry run pre-commit run ruff-check
 make format # poetry run pre-commit run ruff-format
-make typecheck # poetry run pre-commit run mypi .
+make typecheck # poetry run pre-commit run -v mypy .
 make test # poetry run pytest -q
 # before every commit, devs should:
 make precommit # running make recipes: lint, format, test, typecheck, and poetry run precommit run

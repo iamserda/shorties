@@ -17,24 +17,26 @@ from sqlmodel import select
 from sqlmodel import Session
 from sqlmodel import SQLModel
 
+# LOGGER Object
 logger = logging.getLogger(__name__)
+logging.basicConfig(filename="src/app/logs/main.log", level=logging.INFO)
 
+# Database Config:
 DATABASE_URL = "sqlite:///src/app/db/SHORTIES_DATABASE.db"
 DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
 db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
-
 if db_engine:
     SQLModel.metadata.create_all(db_engine)
 
+# FASTAPI APP Config
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
 api_version = os.getenv("API_VERSION")
-
-
 if not api_version:
     api_version = "/v1"
 
 
+# Routes + Route Handling
 @api_router.get(f"{api_version}/healthz/")
 def healthz() -> dict:
     return {"status": "alive"}
@@ -144,7 +146,7 @@ def create_url(url_item: NewUrlSubmissionModel) -> Sequence[GetUrlResponseModel]
                 result = session.exec(statement=select_statement).all()
 
             new_shorti = ShortiLink(
-                shorti_key=key, shorti_url=url_item.url, brand=url_item.brand
+                shorti_key=key, shorti_url=str(url_item.url), brand=url_item.brand
             )
             session.add(new_shorti)
             session.commit()
@@ -171,6 +173,43 @@ def create_url(url_item: NewUrlSubmissionModel) -> Sequence[GetUrlResponseModel]
     except HTTPException as httpErr:
         logger.exception("HTTPException while creating shorti: %s", httpErr)
         return new_shorties
+
+
+@api_router.delete(f"{api_version}/delete/")
+def delete_a_shorti(shorti_key: str):
+    results = []
+    try:
+        if shorti_key is None or shorti_key == "" or len(shorti_key) < 4:
+            raise HTTPException(
+                status_code=404,
+                detail="status='failure', message='We could not create a new key at this moment!'",
+            )
+        with Session(db_engine) as session:
+            if shorti_key:
+                select_statement = select(ShortiLink).where(
+                    ShortiLink.shorti_key == shorti_key
+                )
+                result = session.exec(statement=select_statement).all()
+                if result:
+                    shorti = result[0]
+                    new_response_item = GetUrlResponseModel(
+                        key=shorti.shorti_key, url=shorti.shorti_url
+                    )
+                    session.delete(shorti)
+                    session.commit()
+                    new_response_item.message = "Deleted Successfully!"
+                    new_response_item.status = "deleted"
+                    results.append(new_response_item)
+                else:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="status='failure' "
+                        + f"message='We did not find any result for keyword: {shorti_key}'",
+                    )
+    except HTTPException as httpErr:
+        logger.info("HTTPException while creating shorti: %s", httpErr)
+        return [httpErr]
+    return results
 
 
 app.include_router(api_router)

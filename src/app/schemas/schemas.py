@@ -19,7 +19,9 @@ class NewUrlSubmissionModel(BaseModel):
 
 
 class GetURLRequestModel(BaseModel):
+    id: int | None = None
     key: str
+    short_url: str | None = None
 
 
 class GetUrlResponseModel(BaseModel):
