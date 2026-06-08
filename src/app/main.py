@@ -7,12 +7,12 @@ from collections.abc import Sequence
 from app.alnumgen import alnum_generator
 from app.db.db import db_engine_factory
 from app.db.models.models import ShortiLink
-from app.schemas.schemas import GetURLRequestModel
 from app.schemas.schemas import GetUrlResponseModel
 from app.schemas.schemas import NewUrlSubmissionModel
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import HTTPException
+from fastapi.responses import RedirectResponse
 from sqlmodel import select
 from sqlmodel import Session
 from sqlmodel import SQLModel
@@ -55,67 +55,42 @@ def display_all() -> Sequence:
         return []
 
 
-@api_router.get(f"{api_version}/redirect/", status_code=301)
-def get_url(shorti_key: str | dict | GetURLRequestModel) -> GetUrlResponseModel | dict:
+@api_router.get(f"{api_version}/redirect/" + "{shorti_key}")
+def get_url(shorti_key: str) -> RedirectResponse:
     try:
-        print(shorti_key)
-        if not shorti_key:
-            raise ValueError("Invalid, user did not provide a key.")
-
-        if (
-            not isinstance(shorti_key, str)
-            and not isinstance(shorti_key, GetURLRequestModel)
-            and not isinstance(shorti_key, dict)
-        ):
-            raise TypeError("The key provided is not of a valid type.")
+        if shorti_key == "":
+            raise HTTPException(
+                status_code=422, detail="Invalid, user did not provide a key."
+            )
 
         with Session(db_engine) as current_session:
-            if isinstance(shorti_key, GetURLRequestModel):
-                shorti_key = shorti_key.key
-            elif isinstance(shorti_key, dict):
-                shorti_key = shorti_key["shorti_key"]
-
             select_statement = select(ShortiLink).where(
                 ShortiLink.shorti_key == shorti_key
             )
-            result = current_session.exec(statement=select_statement).all()
-            if result:
-                new_shorti = result[0]
-                return GetUrlResponseModel(
-                    key=new_shorti.shorti_key,
-                    brand=new_shorti.brand,
-                    url=new_shorti.shorti_url,
-                    message=f'success: url matching "{shorti_key}"  was found!',
-                    status="Success!",
-                )
+            new_shorti = current_session.exec(statement=select_statement).first()
+            if new_shorti:
+                return RedirectResponse(new_shorti.shorti_url)
             else:
                 raise HTTPException(
-                    status_code=404,
-                    detail=f"message: Request-Failed: 'This key {shorti_key} does not match our records. Verify the key and try again.",
+                    status_code=400 | 422,
+                    detail=f"This key '{shorti_key}' does not match our records. Verify the key and try again.",
                 )
 
     except HTTPException as err:
         # todo: log error, send failure message, suggestions for retrying.
-        print(err)
-        raise err
-    except ValueError as err:
-        # todo: log error, send failure message, suggestions for retrying.
-        print(f"invalid-data-error: {err}")
-        return {
-            "key": f"{shorti_key}",
-            "url": None,
-            "status": "failure",
-            "message": f"value-not-found-error: {err}",
-        }
+        logger.exception(f"HTTPException: {err}")
+        raise
     except TypeError as err:
-        # todo: log error, send failure message, suggestions for retrying.
-        print(f"invalid-data-error: {err}")
-        return {
-            "key": f"{shorti_key}",
+        response = {
+            "key": shorti_key,
             "url": None,
             "status": "failure",
-            "message": f"type-validity-error: {err}",
+            "error": str(err),
         }
+
+        # todo: log error, send failure message, suggestions for retrying.
+        logger.exception(f"invalid-data-error: {err}")
+        raise HTTPException(status_code=400, detail=response)
 
 
 @api_router.post(f"{api_version}/create/")
