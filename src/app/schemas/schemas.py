@@ -19,7 +19,7 @@ class NewUrlSubmissionModel(BaseModel):
 
 
 class GetURLRequestModel(BaseModel):
-    key: str
+    shorti_key: str
 
 
 class GetUrlResponseModel(BaseModel):

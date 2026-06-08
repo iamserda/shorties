@@ -147,3 +147,7 @@ example.db
 **/*.ruff_cache
 **/engineering_notes.md
 **/*.db
+
+# ai, coding-agents
+.claude
+.claude/*
