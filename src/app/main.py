@@ -130,11 +130,7 @@ def create_url(url_item: NewUrlSubmissionModel) -> Sequence[GetUrlResponseModel]
             if shorties:
                 new_shorties = [
                     GetUrlResponseModel(
-                        key=shorti.shorti_key,
-                        brand=shorti.brand,
-                        url=shorti.shorti_url,
-                        status="success",
-                        message="A key was successfully generated. We stored your url! You can start using your new short url immediately.",
+                        key=shorti.shorti_key, brand=shorti.brand, url=shorti.shorti_url
                     )
                     for shorti in shorties
                 ]
@@ -171,8 +167,6 @@ def delete_a_shorti(shorti_key: str):
                     )
                     session.delete(shorti)
                     session.commit()
-                    new_response_item.message = "Deleted Successfully!"
-                    new_response_item.status = "deleted"
                     results.append(new_response_item)
                 else:
                     raise HTTPException(
