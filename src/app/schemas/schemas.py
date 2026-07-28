@@ -20,6 +20,6 @@ class GetURLRequestModel(BaseModel):
 
 
 class GetUrlResponseModel(BaseModel):
-    key: str | None = None
-    url: str | None = None
-    brand: str | None = None
+    key: str
+    url: str
+    brand: str | None
