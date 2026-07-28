@@ -1,32 +1,71 @@
 from __future__ import annotations
 
+import logging
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import create_engine
 from sqlmodel import SQLModel
 
 
-def db_engine_factory(db_url: str, dev_mode=False):
+def log_error(err):
+    # LOGGER Object
+    logger = logging.getLogger(__name__)
+    logger.error(err)
+
+
+def db_engine_factory(db_url: str | None, dev_mode: bool = False):
     try:
-        if db_url is None:
-            raise ValueError("A URL path is required.")
-        db_engine = create_engine(db_url, echo=dev_mode)
-        if db_engine is None:
-            raise ValueError(
-                "Failed to create DB ENGINE. Check the URL argument. Check sys/admin/dev logs for more details!"
+        if not isinstance(db_url, str):
+            type_err = TypeError("Invalid type for Database URL. Expecting a string...")
+            raise type_err
+        if db_url == "":
+            val_err = ValueError(
+                "DB URL provided is not valid. DB URL cannot be empty."
             )
-        return db_engine
-    except ValueError as valErr:
-        print("url-path-error:", valErr)  # TODO: Logger!
-        return None
+            raise val_err
+        return create_engine(db_url, echo=dev_mode)
+
+    except (TypeError, ValueError) as err:
+        log_error(err)
+        raise
+
+    except SQLAlchemyError as err:
+        log_error(err)
+        raise
+
+
+def dev_create_db() -> None:
+    # For DEV-ENV only.
+    # This runs in script mode and NOT as part of the application.
+    # This is being used to create the DB for the first time if it does not already exist.
+    # This is strictly for SQLite dev environment.
+    # TODO: Move DB to postgres SQL. This section will NO LONGER BE NEEDED.
+    # Come to think of it, maybe I should make this its own file within db or elsewhere considering its purpose.
+    # It does not belong here.
+
+    load_dotenv()
+    APP_DIR = Path(__file__).resolve().parent.parent
+    LOGS_DIR = APP_DIR.joinpath("logs")
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    LOGFILE_PATH = LOGS_DIR.joinpath("db.log")
+    logging.basicConfig(
+        filename=LOGFILE_PATH,
+        level=logging.DEBUG,
+        datefmt="%m/%d/%Y %I:%M:%S %p",
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    DATABASE_URL = os.getenv("DEV_DATABASE_URL")
+    DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
+    db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
+    try:
+        SQLModel.metadata.create_all(db_engine)  # will create a DB without any table
+    except SQLAlchemyError as err:
+        log_error(err)
+        raise
 
 
 if __name__ == "__main__":
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
-    if DATABASE_URL:
-        db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
-        if db_engine:
-            SQLModel.metadata.create_all(
-                db_engine
-            )  # will create a DB without any table
+    dev_create_db()

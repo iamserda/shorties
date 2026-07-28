@@ -8,7 +8,9 @@ from random import randint
 from app.constants import KEY_MAX
 from app.constants import KEY_MIN
 
-if not KEY_MIN < 5 or KEY_MAX < KEY_MIN:
+logger = logging.getLogger(__name__)
+
+if KEY_MIN < 5 or KEY_MAX < KEY_MIN:
     raise ValueError("Invalid minimum and maximum length for key!")
 
 
@@ -25,7 +27,7 @@ def alnum_generator() -> str:
                 break
         return key
     except ValueError as val_err:
-        val_err
+        logger.exception(val_err)
         return key
 
 
