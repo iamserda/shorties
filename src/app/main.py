@@ -17,6 +17,9 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError
+from sqlmodel import insert
 from sqlmodel import select
 from sqlmodel import Session
 from sqlmodel import SQLModel
@@ -155,23 +158,32 @@ def create_url(url_item: NewUrlSubmissionModel) -> list[GetUrlResponseModel]:
                 detail="Invalid submission, missing url. We cannot create a new shorti without a valid url input.",
             )
 
-        key: str = alnum_generator()
-        new_shorties: list[GetUrlResponseModel] = []
         with Session(db_engine) as session:
-            select_statement = select(ShortiLink).where(ShortiLink.shorti_key == key)
-            result = session.exec(statement=select_statement).all()
-            while result:
-                key = alnum_generator()
-                select_statement = select(ShortiLink).where(
-                    ShortiLink.shorti_key == key
+            try:
+                new_shorties: list[GetUrlResponseModel] = []
+                for _ in range(10):
+                    key = alnum_generator()
+                    insert_statement = insert(ShortiLink).values(
+                        shorti_key="scap", shorti_url=url_item.url, brand=url_item.brand
+                    )
+                    session.exec(statement=insert_statement)
+                    session.commit()
+            except IntegrityError as integrity_err:
+                logger.exception(
+                    f"IntegrityError: An error occurred while inserting a new shorti link: {integrity_err}"
                 )
-                result = session.exec(statement=select_statement).all()
-
-            new_shorti = ShortiLink(
-                shorti_key=key, shorti_url=str(url_item.url), brand=url_item.brand
-            )
-            session.add(new_shorti)
-            session.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail="A database integrity error occurred while creating a new shorti link. Please ensure the data is valid and try again.",
+                )
+            except OperationalError as op_err:
+                logger.exception(
+                    f"OperationalError: An error occurred while checking for existing shorti key: {op_err}"
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="A server-side error occurred while checking for existing shorti key. Please try again later.",
+                )
 
             select_statement = select(ShortiLink).where(ShortiLink.shorti_key == key)
             shorties: Sequence = session.exec(statement=select_statement).all()
