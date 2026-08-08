@@ -51,7 +51,6 @@ DATABASE_URL: str = (
 )
 
 db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
-db_engine = None
 if db_engine:
     SQLModel.metadata.create_all(db_engine)
 # FASTAPI APP Config
