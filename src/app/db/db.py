@@ -13,7 +13,7 @@ from sqlmodel import SQLModel
 def log_error(err):
     # LOGGER Object
     logger = logging.getLogger(__name__)
-    logger.error(err)
+    logger.error(err, exc_info=True)
 
 
 def db_engine_factory(db_url: str | None, dev_mode: bool = False):

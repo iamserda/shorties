@@ -2,34 +2,39 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Sequence
 from pathlib import Path
 
 import uvicorn
-from app.alnumgen import alnum_generator
 from app.db.db import db_engine_factory
+from app.db.db_exceptions import DBEngineError
+from app.db.db_exceptions import EmptyDatabaseError
 from app.db.models.models import ShortiLink
 from app.schemas.schemas import GetUrlResponseModel
-from app.schemas.schemas import NewUrlSubmissionModel
+from app.schemas.schemas import GetUrlsResponseModel
 from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Query
-from fastapi.responses import RedirectResponse
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.exc import OperationalError
-from sqlmodel import insert
 from sqlmodel import select
 from sqlmodel import Session
 from sqlmodel import SQLModel
 
+
 # LOGGER Object
 load_dotenv()
+API_VERSIONS = (
+    eval(os.getenv("API_VERSIONS", "[/v1]")) if os.getenv("API_VERSIONS") else ["/v1"]
+)
+API_VERSION = (
+    API_VERSIONS[0] if isinstance(API_VERSIONS, list) and API_VERSIONS else "/v1"
+)
+DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
 APP_DIR = Path(__file__).resolve().parent
 LOGS_DIR = APP_DIR.joinpath("logs")
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 APPLOG_PATH = LOGS_DIR.joinpath("main.log")
+
 logging.basicConfig(
     filename=APPLOG_PATH,
     level=logging.INFO,
@@ -44,207 +49,93 @@ DATABASE_URL: str = (
     if os.getenv("DEV_DATABASE_URL")
     else "sqlite:///:memory:"
 )
-DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
+
 db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
+db_engine = None
 if db_engine:
     SQLModel.metadata.create_all(db_engine)
 # FASTAPI APP Config
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
-api_version = os.getenv("API_VERSION")
-if not api_version:
-    api_version = "/v1"
+
+if not API_VERSION:
+    API_VERSION = "/v1"
 
 
 # Routes + Route Handling
-@api_router.get(f"{api_version}/healthz/")
-def healthz() -> dict:
+@api_router.get(f"/{API_VERSION}/healthz/")
+async def healthz() -> dict:
     return {"status": "alive"}
 
 
-@api_router.get(f"{api_version}/links/", response_model=list[GetUrlResponseModel])
-def get_all_links(
-    offeset: int = 0, limit: int = Query(default=20, le=20)
-) -> list[GetUrlResponseModel]:
-    results: list[GetUrlResponseModel] = []
+@api_router.get(f"/{API_VERSION}/links/", response_model=GetUrlsResponseModel)
+async def get_all_links(
+    offset: int = Query(default=0, ge=0), limit: int = Query(default=20, le=20)
+) -> GetUrlsResponseModel:
+
+    results = GetUrlsResponseModel(urls=[])
+    db_engine_error = {
+        "name": "db-error",
+        "description": "An error occurred with DB Engine!",
+    }
+    empty_db_error = {
+        "name": "empty-database-error",
+        "description": "Our database is currently empty! Please create a new link via the API enpoints for creating new links and try again. See our documentation for more information.",
+    }
+    common_error_message = "A server-side error occurred! It's has been logged for technical review. It will be reviewed ASAP by one our engineers."
     try:
         if not db_engine:
-            error_dict = {"name": "db-error", "description": "Error with DB Engine!"}
-            raise ValueError(error_dict)
+            raise DBEngineError(db_engine_error)
         with Session(db_engine) as session:
-            select_statement = select(ShortiLink)
-            results = [
+            if not session:
+                raise DBEngineError(db_engine_error)
+            select_statement = select(ShortiLink).offset(offset).limit(limit)
+            new_urls = [
                 GetUrlResponseModel(
                     key=shorti.shorti_key, url=shorti.shorti_url, brand=shorti.brand
                 )
                 for shorti in session.exec(statement=select_statement).all()
             ]
-            if not results:
-                error_dict = {
-                    "name": "empty-database-error",
-                    "description": "The database is currently empty!",
-                }
-                raise ValueError(error_dict)
-    except ValueError as val_err:
-        error_dict = val_err.args[0]
-        if error_dict["name"] == "db-error":
-            logger.exception(f"error: {error_dict['name']}: {val_err}")
-            raise HTTPException(status_code=500, detail=error_dict)
-        elif error_dict["name"] == "empty-database-error":
-            logger.exception(f"error: {error_dict['name']}: {val_err}")
-        else:
-            raise
+            results.urls = new_urls
+            if not results.urls:
+                raise EmptyDatabaseError(empty_db_error)
+    except EmptyDatabaseError as empty_db_err:
+        logger.info(
+            f"error: {empty_db_err.description}",
+            exc_info=True,
+        )
+        return GetUrlsResponseModel(urls=[])
+    except DBEngineError as db_engine_err:
+        STATUS_CODE = 500
+        logger.exception(
+            f"error: {db_engine_err}",
+            exc_info=True,
+        )
+        new_db_engine_error = {
+            "error": {
+                "type": db_engine_err.__class__.__name__,
+                "description": db_engine_err.description,
+                "status-code": STATUS_CODE,
+                "message": common_error_message,
+            }
+        }
+        raise HTTPException(status_code=500, detail=new_db_engine_error)
+    except HTTPException as httpErr:
+        logger.info(
+            f"A generic HTTP Exception occurred while getting links from database: {httpErr}"
+        )
+        raise
     except Exception as app_exception:
         # all-in-one crapshoot for now.
+        logging_message = f"An unexpected error occurred while getting links from database: {app_exception}"
         logger.exception(
-            f"unknown-error: An unknown error occurred in display_all function.\nerror-detail: {app_exception}"
+            logging_message,
+            exc_info=True,
         )
         raise HTTPException(
             status_code=500,
-            detail="A server-side error! It's has been logged for review. It will be reviewed ASAP by one our engineers.",
+            detail=common_error_message,
         )
-    return results
-
-
-@api_router.get(f"{api_version}/redirect/" + "{shorti_key}")
-def get_url(shorti_key: str) -> RedirectResponse:
-    try:
-        with Session(db_engine) as current_session:
-            select_statement = select(ShortiLink).where(
-                ShortiLink.shorti_key == shorti_key
-            )
-            shorti = current_session.exec(statement=select_statement).first()
-            if shorti:
-                return RedirectResponse(shorti.shorti_url)
-            else:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"This key '{shorti_key}' does not match our records. Verify the key and try again.",
-                )
-
-    except HTTPException as err:
-        # todo: log error, send failure message, suggestions for retrying.
-        response = {
-            "key": shorti_key,
-            "url": None,
-            "status": "failure",
-            "message": "We could not redirect this shorti key because the stored URL data was invalid.",
-            "error": str(err),
-            "suggestions": [
-                "Verify the shorti key and try again.",
-                "Create a new shorti link if the destination URL is missing or invalid.",
-            ],
-        }
-        logger.exception(
-            "HTTPException: Invalid redirect data for shorti key %s: %s",
-            shorti_key,
-            err,
-        )
-        raise HTTPException(status_code=err.status_code, detail=response)
-
-
-@api_router.post(f"{api_version}/create/")
-def create_url(url_item: NewUrlSubmissionModel) -> list[GetUrlResponseModel]:
-    try:
-        if url_item is None or not len(url_item.url):
-            raise HTTPException(
-                status_code=404,
-                detail="Invalid submission, either url or both url and brand are missing!",
-            )
-
-        if url_item and len(url_item.url) <= 3:
-            raise HTTPException(
-                status_code=404,
-                detail="Invalid submission, missing url. We cannot create a new shorti without a valid url input.",
-            )
-
-        with Session(db_engine) as session:
-            try:
-                new_shorties: list[GetUrlResponseModel] = []
-                for _ in range(10):
-                    key = alnum_generator()
-                    insert_statement = insert(ShortiLink).values(
-                        shorti_key="scap", shorti_url=url_item.url, brand=url_item.brand
-                    )
-                    session.exec(statement=insert_statement)
-                    session.commit()
-            except IntegrityError as integrity_err:
-                logger.exception(
-                    f"IntegrityError: An error occurred while inserting a new shorti link: {integrity_err}"
-                )
-                raise HTTPException(
-                    status_code=400,
-                    detail="A database integrity error occurred while creating a new shorti link. Please ensure the data is valid and try again.",
-                )
-            except OperationalError as op_err:
-                logger.exception(
-                    f"OperationalError: An error occurred while checking for existing shorti key: {op_err}"
-                )
-                raise HTTPException(
-                    status_code=500,
-                    detail="A server-side error occurred while checking for existing shorti key. Please try again later.",
-                )
-
-            select_statement = select(ShortiLink).where(ShortiLink.shorti_key == key)
-            shorties: Sequence = session.exec(statement=select_statement).all()
-            if shorties:
-                new_shorties = [
-                    GetUrlResponseModel(
-                        key=shorti.shorti_key, brand=shorti.brand, url=shorti.shorti_url
-                    )
-                    for shorti in shorties
-                ]
-            else:
-                raise HTTPException(
-                    status_code=404,
-                    detail="status='failure', message='We could not create a new key at this moment!'",
-                )
-        return new_shorties
-    except HTTPException as err:
-        # todo: log error, send failure message, suggestions for retrying.
-        # response = {
-        #     "url": None,
-        #     "status": "failure",
-        #     "message": "We could not create a new link.",
-        #     "error": str(err),
-        #     "suggestions": ["Verify your submitted data and try again."],
-        # }
-        logger.exception(f"Error: HTTPException: {err}")
-        raise
-
-
-@api_router.delete(f"{api_version}/delete/")
-def delete_a_shorti(shorti_key: str):
-    results = []
-    try:
-        if shorti_key is None or shorti_key == "" or len(shorti_key) < 4:
-            raise HTTPException(
-                status_code=404,
-                detail="status='failure', message='We could not create a new key at this moment!'",
-            )
-        with Session(db_engine) as session:
-            if shorti_key:
-                select_statement = select(ShortiLink).where(
-                    ShortiLink.shorti_key == shorti_key
-                )
-                result = session.exec(statement=select_statement).all()
-                if result:
-                    shorti = result[0]
-                    new_response_item = GetUrlResponseModel(
-                        key=shorti.shorti_key, url=shorti.shorti_url, brand=shorti.brand
-                    )
-                    session.delete(shorti)
-                    session.commit()
-                    results.append(new_response_item)
-                else:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="status='failure' "
-                        + f"message='We did not find any result for keyword: {shorti_key}'",
-                    )
-    except HTTPException as httpErr:
-        logger.info("HTTPException while creating shorti: %s", httpErr)
-        raise httpErr
     return results
 
 
