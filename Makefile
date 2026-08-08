@@ -20,7 +20,7 @@ lint:
 	poetry run pre-commit run ruff-check
 
 run:
-	poetry run python src/app/main.py
+	poetry run uvicorn src.app.main:app --reload --reload-dir=. --host 0.0.0.0 --port 8001 --log-level debug
 
 test:
 	poetry run pytest -q
