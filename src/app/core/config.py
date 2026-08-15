@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     log_to_file: bool = True
     log_dir: str = "logs"
 
+    # Migrations
+    run_migrations_on_startup: bool = True
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import logging
 
-from app.core.config import get_settings
-from app.core.logging import configure_logging
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import create_engine
-from sqlmodel import SQLModel
 
 
 def log_error(err):
@@ -34,32 +31,3 @@ def db_engine_factory(db_url: str | None, dev_mode: bool = False, **engine_kwarg
     except SQLAlchemyError as err:
         log_error(err)
         raise
-
-
-def dev_create_db() -> None:
-    # For DEV-ENV only.
-    # This runs in script mode and NOT as part of the application.
-    # This is being used to create the DB for the first time if it does not already exist.
-    # This is strictly for SQLite dev environment.
-    # TODO: Move DB to postgres SQL. This section will NO LONGER BE NEEDED.
-    # Come to think of it, maybe I should make this its own file within db or elsewhere considering its purpose.
-    # It does not belong here.
-
-    settings = get_settings()
-    configure_logging(
-        level=logging.DEBUG,
-        log_to_file=settings.log_to_file,
-        log_dir=settings.log_dir,
-    )
-    db_engine = db_engine_factory(
-        db_url=settings.dev_database_url, dev_mode=settings.dev_env
-    )
-    try:
-        SQLModel.metadata.create_all(db_engine)  # will create a DB without any table
-    except SQLAlchemyError as err:
-        log_error(err)
-        raise
-
-
-if __name__ == "__main__":
-    dev_create_db()

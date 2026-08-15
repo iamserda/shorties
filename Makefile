@@ -1,7 +1,7 @@
-.PHONY: help install test lint fmt format typecheck precommit precommit-all
+.PHONY: help install test lint fmt format typecheck precommit precommit-all migrate makemigrations
 
 help:
-	@echo "Targets: help install test lint fmt format typecheck precommit precommit-all"
+	@echo "Targets: help install test lint fmt format typecheck precommit precommit-all migrate makemigrations"
 
 activate:
 	@echo 'To activate virtual env, run the following in your shell:'
@@ -21,6 +21,13 @@ lint:
 
 run:
 	poetry run uvicorn src.app.main:app --reload --reload-dir=. --host 0.0.0.0 --port 8001 --log-level debug
+
+migrate:
+	poetry run alembic upgrade head
+
+# Usage: make makemigrations message="add foo column"
+makemigrations:
+	poetry run alembic revision --autogenerate -m "$(message)"
 
 test:
 	poetry run pytest -q

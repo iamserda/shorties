@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 from app.api.routes import healthz
@@ -15,7 +16,9 @@ from fastapi import FastAPI
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
-from sqlmodel import SQLModel
+
+from alembic import command
+from alembic.config import Config
 
 _settings = get_settings()
 configure_logging(log_to_file=_settings.log_to_file, log_dir=_settings.log_dir)
@@ -30,8 +33,20 @@ logger = logging.getLogger(__name__)
 db_engine: Engine = create_db_engine()
 
 
-def populate_db(db_engine: Engine) -> None:
-    SQLModel.metadata.create_all(bind=db_engine)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def run_migrations() -> None:
+    """Bring the DB schema to head via Alembic.
+
+    Replaces the old SQLModel.metadata.create_all() call, which can only
+    create tables that don't exist yet — it silently does nothing when a
+    column changes on a table that's already there. Alembic migrations
+    are the tracked, reviewable record of every schema change instead.
+    """
+    alembic_cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
+    command.upgrade(alembic_cfg, "head")
 
 
 @asynccontextmanager
@@ -39,7 +54,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Runs in whichever process actually serves requests, including
     # uvicorn's reload worker subprocess (unlike code gated behind
     # `if __name__ == "__main__":`, which only runs in the launcher).
-    populate_db(db_engine)
+    # Gated so tests — which build their own isolated engine and manage
+    # their own schema — never touch the real configured DB via this path.
+    if _settings.run_migrations_on_startup:
+        run_migrations()
     yield
 
 

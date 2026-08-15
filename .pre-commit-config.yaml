@@ -12,6 +12,12 @@ repos:
     rev: v3.16.0
     hooks:
     -   id: reorder-python-imports
+        # Excludes alembic/: its files are semi-generated (Alembic's own
+        # template) and always start with a module docstring, which this
+        # hook and ruff-format disagree on (blank line before the first
+        # import or not) — an infinite ping-pong on every run otherwise.
+        # ruff-check + ruff-format alone are sufficient and stable there.
+        exclude: ^alembic/
         args: [--py310-plus, --add-import, 'from __future__ import annotations']
 
 -   repo: https://github.com/pre-commit/mirrors-mypy
