@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import logging
+import time
 from functools import lru_cache
 
 from app.core.config import get_settings
 from app.db.db import db_engine_factory
 from app.db.db_exceptions import DBEngineError
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import StaticPool
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -68,3 +74,37 @@ def create_db_engine() -> Engine:
         raise DBEngineError(db_engine_error)
 
     return db_engine
+
+
+def wait_for_db(
+    engine: Engine,
+    *,
+    max_attempts: int,
+    base_delay_seconds: float,
+) -> None:
+    """Block until `engine` can serve a trivial query, or give up.
+
+    For local `python main.py` the DB is already there — this is a
+    no-op. It matters once something else starts the DB alongside the
+    app (docker compose, especially): the app container can win the
+    race and start before Postgres finishes accepting connections, and
+    without this the app just crashes on boot instead of waiting the
+    few seconds Postgres needs. Backs off exponentially between
+    attempts (base_delay, 2x, 4x, ...) and re-raises the last failure
+    once max_attempts is exhausted.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except OperationalError:
+            if attempt == max_attempts:
+                raise
+            delay = base_delay_seconds * (2 ** (attempt - 1))
+            logger.warning(
+                f"DB not reachable yet (attempt {attempt}/{max_attempts}), "
+                f"retrying in {delay:.1f}s",
+                exc_info=True,
+            )
+            time.sleep(delay)

@@ -41,6 +41,11 @@ class Settings(BaseSettings):
         1800  # recycle idle connections before a managed DB closes them server-side
     )
 
+    # Startup connection retry (e.g. compose: app container starts before
+    # Postgres finishes accepting connections)
+    db_connect_max_attempts: int = 5
+    db_connect_retry_base_delay_seconds: float = 1.0
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

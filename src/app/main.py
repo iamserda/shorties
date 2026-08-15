@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.db_exceptions import DBEngineError
 from app.db.engine import create_db_engine
+from app.db.engine import wait_for_db
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -57,6 +58,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Gated so tests — which build their own isolated engine and manage
     # their own schema — never touch the real configured DB via this path.
     if _settings.run_migrations_on_startup:
+        wait_for_db(
+            db_engine,
+            max_attempts=_settings.db_connect_max_attempts,
+            base_delay_seconds=_settings.db_connect_retry_base_delay_seconds,
+        )
         run_migrations()
     yield
 
