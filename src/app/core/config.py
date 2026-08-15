@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     dev_env: bool = False
     api_version: str = "v1"
 
+    # Logging
+    log_to_file: bool = True
+    log_dir: str = "logs"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

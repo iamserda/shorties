@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
-configure_logging()
+_settings = get_settings()
+configure_logging(log_to_file=_settings.log_to_file, log_dir=_settings.log_dir)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ async def db_engine_error_handler(request: Request, exc: DBEngineError) -> JSONR
 
 
 # API Version Configuration
-API_VERSION = get_settings().api_version
+API_VERSION = _settings.api_version
 
 # Routes + Route Handling
 app.include_router(healthz.router, prefix=f"/{API_VERSION}")

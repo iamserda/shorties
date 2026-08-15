@@ -65,6 +65,10 @@ coverage.xml
 # Django stuff:
 *.log
 local_settings.py
+
+# App log output (rotated backups are suffixed with a date, not `.log`,
+# so *.log alone doesn't catch them)
+/logs/
 db.sqlite3
 db.sqlite3-journal
 

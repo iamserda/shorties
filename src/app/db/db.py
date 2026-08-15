@@ -45,8 +45,12 @@ def dev_create_db() -> None:
     # Come to think of it, maybe I should make this its own file within db or elsewhere considering its purpose.
     # It does not belong here.
 
-    configure_logging(level=logging.DEBUG)
     settings = get_settings()
+    configure_logging(
+        level=logging.DEBUG,
+        log_to_file=settings.log_to_file,
+        log_dir=settings.log_dir,
+    )
     db_engine = db_engine_factory(
         db_url=settings.dev_database_url, dev_mode=settings.dev_env
     )
