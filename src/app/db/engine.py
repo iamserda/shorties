@@ -24,15 +24,34 @@ def create_db_engine() -> Engine:
     settings = get_settings()
     DATABASE_URL: str = settings.dev_database_url or "sqlite:///:memory:"
 
-    engine_kwargs = {}
-    if DATABASE_URL in ("sqlite://", "sqlite:///:memory:") or (
+    is_memory_sqlite = DATABASE_URL in ("sqlite://", "sqlite:///:memory:") or (
         DATABASE_URL.startswith("sqlite") and ":memory:" in DATABASE_URL
-    ):
+    )
+    is_sqlite = DATABASE_URL.startswith("sqlite")
+
+    if is_memory_sqlite:
         # In-memory sqlite is per-connection by default, so without a
         # shared StaticPool, each new connection sees an empty database.
         engine_kwargs = {
             "connect_args": {"check_same_thread": False},
             "poolclass": StaticPool,
+        }
+    elif is_sqlite:
+        # A sqlite file doesn't need pool tuning — there's no remote
+        # server to time out or lose a stale connection to — but
+        # pre-ping is cheap and harmless everywhere.
+        engine_kwargs = {"pool_pre_ping": True}
+    else:
+        # A real server (Postgres) benefits from an actual bounded pool:
+        # pool_pre_ping catches a connection the server already dropped
+        # before it surfaces as a request failure, and pool_recycle
+        # avoids handing out a connection older than what a managed DB
+        # (e.g. Render's Postgres) will silently close server-side.
+        engine_kwargs = {
+            "pool_size": settings.db_pool_size,
+            "max_overflow": settings.db_max_overflow,
+            "pool_recycle": settings.db_pool_recycle_seconds,
+            "pool_pre_ping": True,
         }
 
     db_engine = db_engine_factory(

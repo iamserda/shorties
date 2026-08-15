@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     # Migrations
     run_migrations_on_startup: bool = True
 
+    # Connection pool (applies to non-sqlite-memory engines, e.g. Postgres)
+    db_pool_size: int = 5
+    db_max_overflow: int = 10
+    db_pool_recycle_seconds: int = (
+        1800  # recycle idle connections before a managed DB closes them server-side
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
