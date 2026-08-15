@@ -21,3 +21,7 @@ class EmptyDatabaseError(DatabaseError):
 
 class DBEngineError(DatabaseError):
     """Custom exception for database engine errors."""
+
+
+class DBSessionError(DBEngineError):
+    """Custom exception for database engine errors."""

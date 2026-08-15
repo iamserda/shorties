@@ -90,11 +90,9 @@ class TestGetAllLinks:
         keys = {item["key"] for item in body["urls"]}
         assert keys == {"abc123", "def456"}
         by_key = {item["key"]: item for item in body["urls"]}
-        assert by_key["abc123"] == {
-            "key": "abc123",
-            "url": "https://example.com/one",
-            "brand": "acme",
-        }
+        assert by_key["abc123"]["url"] == "https://example.com/one"
+        assert by_key["abc123"]["brand"] == "acme"
+        assert by_key["abc123"]["hit_count"] == 0
         assert by_key["def456"]["brand"] is None
 
     def test_respects_limit_query_parameter(self, isolated_test_engine):

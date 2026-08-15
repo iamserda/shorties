@@ -2,151 +2,94 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from app.db.db import db_engine_factory
+from app.api.routes import healthz
+from app.api.routes import links
 from app.db.db_exceptions import DBEngineError
-from app.db.db_exceptions import EmptyDatabaseError
-from app.db.models.models import ShortiLink
-from app.schemas.schemas import GetUrlResponseModel
-from app.schemas.schemas import GetUrlsResponseModel
+from app.db.engine import create_db_engine
 from dotenv import load_dotenv
-from fastapi import APIRouter
 from fastapi import FastAPI
-from fastapi import HTTPException
-from fastapi import Query
-from sqlmodel import select
-from sqlmodel import Session
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
-
-# LOGGER Object
 load_dotenv()
-API_VERSIONS = (
-    eval(os.getenv("API_VERSIONS", "[/v1]")) if os.getenv("API_VERSIONS") else ["/v1"]
-)
-API_VERSION = (
-    API_VERSIONS[0] if isinstance(API_VERSIONS, list) and API_VERSIONS else "/v1"
-)
-DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
+
+# Logger Configuration
 APP_DIR = Path(__file__).resolve().parent
 LOGS_DIR = APP_DIR.joinpath("logs")
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 APPLOG_PATH = LOGS_DIR.joinpath("main.log")
-
 logging.basicConfig(
     filename=APPLOG_PATH,
     level=logging.INFO,
     datefmt="%m/%d/%Y %I:%M:%S %p",
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
-logger = logging.getLogger(__name__)
 
-# Database Config:
-DATABASE_URL: str = (
-    str(os.getenv("DEV_DATABASE_URL"))
-    if os.getenv("DEV_DATABASE_URL")
-    else "sqlite:///:memory:"
-)
+# Database Engine Initialization
+# create_db_engine() is cached (see app/db/engine.py), so this returns the
+# same Engine instance every time it's called anywhere in the app. Routes
+# resolve their session through this module-level attribute (rather than
+# calling create_db_engine() directly), so it can be swapped out in tests.
+db_engine: Engine = create_db_engine()
 
-db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
-if db_engine:
-    SQLModel.metadata.create_all(db_engine)
+
+def populate_db(db_engine: Engine) -> None:
+    SQLModel.metadata.create_all(bind=db_engine)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # Runs in whichever process actually serves requests, including
+    # uvicorn's reload worker subprocess (unlike code gated behind
+    # `if __name__ == "__main__":`, which only runs in the launcher).
+    populate_db(db_engine)
+    yield
+
+
 # FASTAPI APP Config
-app = FastAPI(title="Shorties App")
-api_router = APIRouter()
+app = FastAPI(title="Shorties App", lifespan=lifespan)
 
-if not API_VERSION:
-    API_VERSION = "/v1"
 
+@app.exception_handler(DBEngineError)
+async def db_engine_error_handler(request: Request, exc: DBEngineError) -> JSONResponse:
+    # Catches DBEngineError (and its subclass DBSessionError) raised during
+    # dependency resolution, e.g. get_db_session — those happen before a
+    # route body's own try/except ever runs, so they need a handler here.
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": {
+                "error": {
+                    "type": exc.__class__.__name__,
+                    "description": exc.description,
+                    "status-code": 500,
+                    "message": "A server-side error occurred! It's has been logged for technical review. It will be reviewed ASAP by one our engineers.",
+                }
+            }
+        },
+    )
+
+
+# API Version Configuration
+API_VERSION = os.getenv("API_VERSION", "v1")
 
 # Routes + Route Handling
-@api_router.get(f"/{API_VERSION}/healthz/")
-async def healthz() -> dict:
-    return {"status": "alive"}
+app.include_router(healthz.router, prefix=f"/{API_VERSION}")
+app.include_router(links.router, prefix=f"/{API_VERSION}", tags=["Links"])
 
-
-@api_router.get(f"/{API_VERSION}/links/", response_model=GetUrlsResponseModel)
-async def get_all_links(
-    offset: int = Query(default=0, ge=0), limit: int = Query(default=20, le=20)
-) -> GetUrlsResponseModel:
-
-    results = GetUrlsResponseModel(urls=[])
-    db_engine_error = {
-        "name": "db-error",
-        "description": "An error occurred with DB Engine!",
-    }
-    empty_db_error = {
-        "name": "empty-database-error",
-        "description": "Our database is currently empty! Please create a new link via the API enpoints for creating new links and try again. See our documentation for more information.",
-    }
-    common_error_message = "A server-side error occurred! It's has been logged for technical review. It will be reviewed ASAP by one our engineers."
-    try:
-        if not db_engine:
-            raise DBEngineError(db_engine_error)
-        with Session(db_engine) as session:
-            if not session:
-                raise DBEngineError(db_engine_error)
-            select_statement = select(ShortiLink).offset(offset).limit(limit)
-            new_urls = [
-                GetUrlResponseModel(
-                    key=shorti.shorti_key, url=shorti.shorti_url, brand=shorti.brand
-                )
-                for shorti in session.exec(statement=select_statement).all()
-            ]
-            results.urls = new_urls
-            if not results.urls:
-                raise EmptyDatabaseError(empty_db_error)
-    except EmptyDatabaseError as empty_db_err:
-        logger.info(
-            f"error: {empty_db_err.description}",
-            exc_info=True,
-        )
-        return GetUrlsResponseModel(urls=[])
-    except DBEngineError as db_engine_err:
-        STATUS_CODE = 500
-        logger.exception(
-            f"error: {db_engine_err}",
-            exc_info=True,
-        )
-        new_db_engine_error = {
-            "error": {
-                "type": db_engine_err.__class__.__name__,
-                "description": db_engine_err.description,
-                "status-code": STATUS_CODE,
-                "message": common_error_message,
-            }
-        }
-        raise HTTPException(status_code=500, detail=new_db_engine_error)
-    except HTTPException as httpErr:
-        logger.info(
-            f"A generic HTTP Exception occurred while getting links from database: {httpErr}"
-        )
-        raise
-    except Exception as app_exception:
-        # all-in-one crapshoot for now.
-        logging_message = f"An unexpected error occurred while getting links from database: {app_exception}"
-        logger.exception(
-            logging_message,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=common_error_message,
-        )
-    return results
-
-
-app.include_router(api_router)
+# Run the application, if this script is executed directly (not imported as a module).
 if __name__ == "__main__":
-    HOST: str = "0.0.0.0"
-    PORT: int = 8001
-    if db_engine:
-        uvicorn.run(
-            "main:app",
-            reload=True,
-            host=HOST,
-            port=PORT,
-            log_level="debug",
-        )
+    uvicorn.run(
+        "main:app",
+        reload=True,
+        host="0.0.0.0",
+        port=8001,
+        log_level="debug",
+    )
