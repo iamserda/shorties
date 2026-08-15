@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import uvicorn
 from app.api.routes import healthz
 from app.api.routes import links
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 from app.db.db_exceptions import DBEngineError
 from app.db.engine import create_db_engine
 from fastapi import FastAPI
@@ -17,17 +17,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
-# Logger Configuration
-APP_DIR = Path(__file__).resolve().parent
-LOGS_DIR = APP_DIR.joinpath("logs")
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
-APPLOG_PATH = LOGS_DIR.joinpath("main.log")
-logging.basicConfig(
-    filename=APPLOG_PATH,
-    level=logging.INFO,
-    datefmt="%m/%d/%Y %I:%M:%S %p",
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
+configure_logging()
+
+logger = logging.getLogger(__name__)
 
 # Database Engine Initialization
 # create_db_engine() is cached (see app/db/engine.py), so this returns the
@@ -59,6 +51,7 @@ async def db_engine_error_handler(request: Request, exc: DBEngineError) -> JSONR
     # Catches DBEngineError (and its subclass DBSessionError) raised during
     # dependency resolution, e.g. get_db_session — those happen before a
     # route body's own try/except ever runs, so they need a handler here.
+    logger.exception(f"error: {exc}", exc_info=exc)
     return JSONResponse(
         status_code=500,
         content={

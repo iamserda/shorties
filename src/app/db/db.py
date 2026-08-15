@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import create_engine
 from sqlmodel import SQLModel
@@ -45,16 +45,7 @@ def dev_create_db() -> None:
     # Come to think of it, maybe I should make this its own file within db or elsewhere considering its purpose.
     # It does not belong here.
 
-    APP_DIR = Path(__file__).resolve().parent.parent
-    LOGS_DIR = APP_DIR.joinpath("logs")
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    LOGFILE_PATH = LOGS_DIR.joinpath("db.log")
-    logging.basicConfig(
-        filename=LOGFILE_PATH,
-        level=logging.DEBUG,
-        datefmt="%m/%d/%Y %I:%M:%S %p",
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    configure_logging(level=logging.DEBUG)
     settings = get_settings()
     db_engine = db_engine_factory(
         db_url=settings.dev_database_url, dev_mode=settings.dev_env
