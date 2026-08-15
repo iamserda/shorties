@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,16 +8,14 @@ from pathlib import Path
 import uvicorn
 from app.api.routes import healthz
 from app.api.routes import links
+from app.core.config import get_settings
 from app.db.db_exceptions import DBEngineError
 from app.db.engine import create_db_engine
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
-
-load_dotenv()
 
 # Logger Configuration
 APP_DIR = Path(__file__).resolve().parent
@@ -78,7 +75,7 @@ async def db_engine_error_handler(request: Request, exc: DBEngineError) -> JSONR
 
 
 # API Version Configuration
-API_VERSION = os.getenv("API_VERSION", "v1")
+API_VERSION = get_settings().api_version
 
 # Routes + Route Handling
 app.include_router(healthz.router, prefix=f"/{API_VERSION}")

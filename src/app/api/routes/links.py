@@ -17,7 +17,6 @@ from app.schemas.schemas import GetUrlsResponseModel
 from app.schemas.schemas import LinkAnalyticsResponseModel
 from app.schemas.schemas import NewUrlSubmissionModel
 from app.schemas.schemas import UpdateUrlRequestModel
-from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -29,8 +28,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import col
 from sqlmodel import select
 from sqlmodel import Session
-
-load_dotenv()
 
 MAX_KEY_GENERATION_ATTEMPTS = 5
 RECENT_CLICKS_LIMIT = 20

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from app.core.config import get_settings
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import create_engine
 from sqlmodel import SQLModel
@@ -46,7 +45,6 @@ def dev_create_db() -> None:
     # Come to think of it, maybe I should make this its own file within db or elsewhere considering its purpose.
     # It does not belong here.
 
-    load_dotenv()
     APP_DIR = Path(__file__).resolve().parent.parent
     LOGS_DIR = APP_DIR.joinpath("logs")
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,9 +55,10 @@ def dev_create_db() -> None:
         datefmt="%m/%d/%Y %I:%M:%S %p",
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    DATABASE_URL = os.getenv("DEV_DATABASE_URL")
-    DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
-    db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
+    settings = get_settings()
+    db_engine = db_engine_factory(
+        db_url=settings.dev_database_url, dev_mode=settings.dev_env
+    )
     try:
         SQLModel.metadata.create_all(db_engine)  # will create a DB without any table
     except SQLAlchemyError as err:

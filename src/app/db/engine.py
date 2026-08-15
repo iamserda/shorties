@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
+from app.core.config import get_settings
 from app.db.db import db_engine_factory
 from app.db.db_exceptions import DBEngineError
-from dotenv import load_dotenv
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
-
-load_dotenv()
 
 
 @lru_cache(maxsize=1)
@@ -24,9 +21,8 @@ def create_db_engine() -> Engine:
     Returns:
         Engine: A SQLAlchemy Engine object for database operations.
     """
-    # Database Config:
-    dev_database_url = os.getenv("DEV_DATABASE_URL")
-    DATABASE_URL: str = dev_database_url if dev_database_url else "sqlite:///:memory:"
+    settings = get_settings()
+    DATABASE_URL: str = settings.dev_database_url or "sqlite:///:memory:"
 
     engine_kwargs = {}
     if DATABASE_URL in ("sqlite://", "sqlite:///:memory:") or (
@@ -41,7 +37,7 @@ def create_db_engine() -> Engine:
 
     db_engine = db_engine_factory(
         db_url=DATABASE_URL,
-        dev_mode=os.getenv("DEV_ENV", "False") == "True",
+        dev_mode=settings.dev_env,
         **engine_kwargs,
     )
 
