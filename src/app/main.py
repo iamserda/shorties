@@ -58,39 +58,38 @@ def display_all() -> Sequence:
 @api_router.get(f"{api_version}/redirect/" + "{shorti_key}")
 def get_url(shorti_key: str) -> RedirectResponse:
     try:
-        if shorti_key == "":
-            raise HTTPException(
-                status_code=422, detail="Invalid, user did not provide a key."
-            )
-
         with Session(db_engine) as current_session:
             select_statement = select(ShortiLink).where(
                 ShortiLink.shorti_key == shorti_key
             )
-            new_shorti = current_session.exec(statement=select_statement).first()
-            if new_shorti:
-                return RedirectResponse(new_shorti.shorti_url)
+            shorti = current_session.exec(statement=select_statement).first()
+            if shorti:
+                return RedirectResponse(shorti.shorti_url)
             else:
                 raise HTTPException(
-                    status_code=400 | 422,
+                    status_code=404,
                     detail=f"This key '{shorti_key}' does not match our records. Verify the key and try again.",
                 )
 
     except HTTPException as err:
         # todo: log error, send failure message, suggestions for retrying.
-        logger.exception(f"HTTPException: {err}")
-        raise
-    except TypeError as err:
         response = {
             "key": shorti_key,
             "url": None,
             "status": "failure",
+            "message": "We could not redirect this shorti key because the stored URL data was invalid.",
             "error": str(err),
+            "suggestions": [
+                "Verify the shorti key and try again.",
+                "Create a new shorti link if the destination URL is missing or invalid.",
+            ],
         }
-
-        # todo: log error, send failure message, suggestions for retrying.
-        logger.exception(f"invalid-data-error: {err}")
-        raise HTTPException(status_code=400, detail=response)
+        logger.exception(
+            "HTTPException: Invalid redirect data for shorti key %s: %s",
+            shorti_key,
+            err,
+        )
+        raise HTTPException(status_code=err.status_code, detail=response)
 
 
 @api_router.post(f"{api_version}/create/")
