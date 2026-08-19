@@ -65,4 +65,4 @@ def test_redirect_unknown_key_returns_404(client):
 def test_redirect_unknown_key_error_message(client):
     response = client.get("/v1/redirect/doesnotexist")
     body = response.json()
-    assert "doesnotexist" in body["detail"]
+    assert "doesnotexist" in body["detail"]["error"]
