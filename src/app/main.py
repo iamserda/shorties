@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Sequence
 from pathlib import Path
 
 import uvicorn
@@ -19,7 +18,6 @@ from fastapi import Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
-from sqlmodel import insert
 from sqlmodel import select
 from sqlmodel import Session
 from sqlmodel import SQLModel
@@ -51,15 +49,20 @@ if db_engine:
 # FASTAPI APP Config
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
-api_version = os.getenv("API_VERSION")
-if not api_version:
+api_version = f"/{os.getenv('API_VERSION')}"
+if api_version not in set(["v1", "v2", "v3", "v4", "v5"]):
     api_version = "/v1"
 
 
 # Routes + Route Handling
 @api_router.get(f"{api_version}/healthz/")
 def healthz() -> dict:
-    return {"status": "alive"}
+    with Session(db_engine) as session:
+        select_statement = select(ShortiLink)
+        result = session.exec(select_statement).first()
+        if result:
+            return {"status": "alive", "db-connection": "alive"}
+    return {"status": "alive", "db-connection": "unknown"}
 
 
 @api_router.get(f"{api_version}/links/", response_model=list[GetUrlResponseModel])
@@ -75,7 +78,9 @@ def get_all_links(
             select_statement = select(ShortiLink)
             results = [
                 GetUrlResponseModel(
-                    key=shorti.shorti_key, url=shorti.shorti_url, brand=shorti.brand
+                    shorti_key=shorti.shorti_key,
+                    shorti_url=shorti.shorti_url,
+                    shorti_brand=shorti.brand,
                 )
                 for shorti in session.exec(statement=select_statement).all()
             ]
@@ -146,60 +151,59 @@ def get_url(shorti_key: str) -> RedirectResponse:
 @api_router.post(f"{api_version}/create/")
 def create_url(url_item: NewUrlSubmissionModel) -> list[GetUrlResponseModel]:
     try:
-        if url_item is None or not len(url_item.url):
+        if url_item is None or not len(url_item.shorti_url):
             raise HTTPException(
                 status_code=404,
                 detail="Invalid submission, either url or both url and brand are missing!",
             )
 
-        if url_item and len(url_item.url) <= 3:
+        if url_item and len(url_item.shorti_url) <= 3:
             raise HTTPException(
                 status_code=404,
                 detail="Invalid submission, missing url. We cannot create a new shorti without a valid url input.",
             )
 
+        new_shorties: list[GetUrlResponseModel] = []
         with Session(db_engine) as session:
-            try:
-                new_shorties: list[GetUrlResponseModel] = []
-                for _ in range(10):
-                    key = alnum_generator()
-                    insert_statement = insert(ShortiLink).values(
-                        shorti_key="scap", shorti_url=url_item.url, brand=url_item.brand
-                    )
-                    session.exec(statement=insert_statement)
-                    session.commit()
-            except IntegrityError as integrity_err:
-                logger.exception(
-                    f"IntegrityError: An error occurred while inserting a new shorti link: {integrity_err}"
-                )
-                raise HTTPException(
-                    status_code=400,
-                    detail="A database integrity error occurred while creating a new shorti link. Please ensure the data is valid and try again.",
-                )
-            except OperationalError as op_err:
-                logger.exception(
-                    f"OperationalError: An error occurred while checking for existing shorti key: {op_err}"
-                )
-                raise HTTPException(
-                    status_code=500,
-                    detail="A server-side error occurred while checking for existing shorti key. Please try again later.",
-                )
-
-            select_statement = select(ShortiLink).where(ShortiLink.shorti_key == key)
-            shorties: Sequence = session.exec(statement=select_statement).all()
-            if shorties:
-                new_shorties = [
-                    GetUrlResponseModel(
-                        key=shorti.shorti_key, brand=shorti.brand, url=shorti.shorti_url
-                    )
-                    for shorti in shorties
-                ]
-            else:
-                raise HTTPException(
-                    status_code=404,
-                    detail="status='failure', message='We could not create a new key at this moment!'",
-                )
-        return new_shorties
+            key = alnum_generator()
+            validated_shorti = ShortiLink.model_validate(
+                {
+                    "shorti_key": key,
+                    "shorti_url": url_item.shorti_url,
+                    "brand": url_item.shorti_brand,
+                }
+            )
+            session.add(validated_shorti)
+            session.commit()
+            session.refresh(validated_shorti)
+            response_item: GetUrlResponseModel = GetUrlResponseModel.model_validate(
+                {
+                    **validated_shorti.model_dump(),
+                    "shorti_brand": validated_shorti.brand,
+                }
+            )
+            new_shorties.append(response_item)
+            return new_shorties
+        raise Exception(
+            status_code=404,
+            detail="Unknown Error Occurred. We have recorded this and notified the operators of this service.",
+        )
+    except IntegrityError as integrity_err:
+        logger.exception(
+            f"IntegrityError: An error occurred while inserting a new shorti link: {integrity_err}"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="A database integrity error occurred while creating a new shorti link. Please ensure the data is valid and try again.",
+        )
+    except OperationalError as op_err:
+        logger.exception(
+            f"OperationalError: An error occurred while checking for existing shorti key: {op_err}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="A server-side error occurred while checking for existing shorti key. Please try again later.",
+        )
     except HTTPException as err:
         # todo: log error, send failure message, suggestions for retrying.
         # response = {
@@ -211,41 +215,62 @@ def create_url(url_item: NewUrlSubmissionModel) -> list[GetUrlResponseModel]:
         # }
         logger.exception(f"Error: HTTPException: {err}")
         raise
+    except Exception as err:
+        new_exception = f"Error: Exception: {err}"
+        logger.exception(new_exception)
+        raise HTTPException(status_code=500, detail=new_exception)
 
 
-@api_router.delete(f"{api_version}/delete/")
+@api_router.delete(f"{api_version}/delete/" + "{shorti_key}")
 def delete_a_shorti(shorti_key: str):
-    results = []
+    print("shorti_key:", shorti_key)
+    deleted_items = []
     try:
         if shorti_key is None or shorti_key == "" or len(shorti_key) < 4:
             raise HTTPException(
                 status_code=404,
-                detail="status='failure', message='We could not create a new key at this moment!'",
+                detail={
+                    "status": "failure",
+                    "message": f"We could not DELETE this key: {shorti_key}!",
+                },
             )
         with Session(db_engine) as session:
             if shorti_key:
                 select_statement = select(ShortiLink).where(
                     ShortiLink.shorti_key == shorti_key
                 )
-                result = session.exec(statement=select_statement).all()
-                if result:
-                    shorti = result[0]
+                lookup_results = session.exec(statement=select_statement).all()
+                for result in lookup_results:
                     new_response_item = GetUrlResponseModel(
-                        key=shorti.shorti_key, url=shorti.shorti_url, brand=shorti.brand
+                        shorti_key=result.shorti_key,
+                        shorti_url=result.shorti_url,
+                        shorti_brand=result.brand,
                     )
-                    session.delete(shorti)
-                    session.commit()
-                    results.append(new_response_item)
-                else:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="status='failure' "
-                        + f"message='We did not find any result for keyword: {shorti_key}'",
-                    )
+                    deleted_items.append(new_response_item)
+                    session.delete(result)
+                session.commit()
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="status='failure' "
+                    + f"message='We did not find any result for keyword: {shorti_key}'",
+                )
+
+        if deleted_items:
+            return deleted_items
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "deletion-status": "failed",
+                    "message": "We did not find any result for keyword: {shorti_key}",
+                    "status_code": 404,
+                },
+            )
+
     except HTTPException as httpErr:
         logger.info("HTTPException while creating shorti: %s", httpErr)
-        raise httpErr
-    return results
+        raise
 
 
 app.include_router(api_router)
