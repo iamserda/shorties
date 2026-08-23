@@ -1,21 +1,50 @@
 # Shorties
 
-A robust, extensible URL shortener — engineered for clarity, reliability, and future innovation.
+A URL shortener built with FastAPI + SQLModel. Early-stage, actively evolving — this README is meant to be kept up to date as the app changes, not written once and forgotten.
 
 ## Overview
 
-Shorties(shortened urls) is a thoughtfully designed URL shortening service, built with maintainability and scalability in mind. Its primary function is to transform lengthy URLs into concise, shareable links, while providing a solid foundation for advanced features and enhancements. It's the next Big Think coming out of Inwood, NYC('The Silicon Valley of the northeast! So I have heard!')
+Shorties transforms long URLs into short, shareable keys. It's a personal/learning project coming out of Inwood, NYC, currently in active early development — expect the API, schema, and infra to keep changing.
 
-The project roadmap includes a unique, innovative twist (currently under wraps) that will differentiate Shorties from conventional solutions. Stay tuned for upcoming announcements.
+> This README tracks reality as of the current commit. If a section here doesn't match the code, the code wins — please open a PR to fix the docs.
 
-## Features
+## What's here today
 
-- Deterministic, collision-resistant URL shortening
-- Intuitive, developer-friendly API
-- Comprehensive error handling and input validation
-- Designed for extensibility and easy integration
-- Clear, maintainable codebase with best practices in mind
-- Additional features and a signature twist coming soon
+- FastAPI app (`src/app/main.py`) with a single versioned router (`/v1`)
+- SQLModel/SQLAlchemy models backed by SQLite by default (`DEV_DATABASE_URL` in `.env`)
+- Alphanumeric key generation using `secrets.choice` (`src/app/alnumgen.py`), key length configurable via `KEY_MIN`/`KEY_MAX`
+- Basic CRUD-ish endpoints:
+  - `GET /v1/healthz/` — liveness + DB connectivity check
+  - `GET /v1/links/` — list stored shorti links (max 20 per page)
+  - `GET /v1/redirect/{shorti_key}` — redirect to the stored URL
+  - `POST /v1/create/` — create a new shorti link
+  - `DELETE /v1/delete/{shorti_key}` — delete a shorti link by key
+- File-based logging to `src/app/logs/main.log`
+- Poetry-managed deps, `ruff` + `mypy` + `pre-commit`, pytest suite, GitHub Actions CI (lint, format check, tests on 3.11/3.14)
+- `Dockerfile` and `docker-compose.yaml` exist but are placeholders/WIP, not yet a working deploy path
+
+## What's planned — production readiness
+
+Roughly in priority order, not committed to any timeline:
+
+- [ ] Fix URL validation on submission and add safeguards against open-redirect abuse
+- [ ] Auth/rate-limiting on write endpoints (`create`, `delete`) — currently unauthenticated and unthrottled
+- [ ] Fail-fast startup config validation (e.g. refuse to boot without a real DB URL outside dev)
+- [ ] Move default persistence off in-memory/SQLite dev DB to Postgres for non-local environments
+- [ ] Flesh out `core/config.py`, `db/session.py`, `api/routes/health.py` (currently empty stubs) or remove them
+- [ ] Structured request logging / observability (metrics, tracing) beyond a flat log file
+- [ ] Pagination cursoring for `/links/` beyond the current fixed 20-item cap
+- [ ] Real Docker/Compose setup for local + prod parity
+- [ ] API versioning that actually works end-to-end (multiple concurrent versions, not just `/v1`)
+- [ ] Click/visit analytics per shorti link
+
+## Aspirational
+
+Longer-term, loosely-held ideas — not commitments, and the shape of these will change:
+
+- Custom/vanity keys and branded short domains
+- Link expiration and scheduled takedown
+- A minimal web UI for creating and managing links without hitting the API directly
 
 ## Getting Started
 

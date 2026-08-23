@@ -78,6 +78,9 @@ def test_alnum_generator() -> None:
             assert len(my_key) >= KEY_MIN and len(my_key) <= KEY_MAX
             assert is_valid_chars(my_key) is True
             logger.info(f"New key generated: {my_key}")
+        print(
+            f"$-> ✅✅✅ {Path(__file__).parent.name}/{Path(__file__).name} TEST PASSED ✅✅✅"
+        )
     except AssertionError as assert_err:
         logger.exception(assert_err)
         raise
