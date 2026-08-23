@@ -26,7 +26,7 @@ def db_engine_factory(db_url: str | None, dev_mode: bool = False):
                 "DB URL provided is not valid. DB URL cannot be empty."
             )
             raise val_err
-        return create_engine(db_url, echo=dev_mode)
+        return create_engine(url=db_url, echo=dev_mode)
 
     except (TypeError, ValueError) as err:
         log_error(err)
@@ -37,7 +37,7 @@ def db_engine_factory(db_url: str | None, dev_mode: bool = False):
         raise
 
 
-def dev_create_db() -> None:
+def create_dev_db() -> None:
     # For DEV-ENV only.
     # This runs in script mode and NOT as part of the application.
     # This is being used to create the DB for the first time if it does not already exist.
@@ -68,4 +68,4 @@ def dev_create_db() -> None:
 
 
 if __name__ == "__main__":
-    dev_create_db()
+    create_dev_db()
