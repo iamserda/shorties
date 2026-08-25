@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from app.db.models.models import ShortiLink
+from app.db.session import get_db_engine
 from app.main import app
 from fastapi.testclient import TestClient
 from sqlmodel import create_engine
@@ -30,17 +31,18 @@ def client_fixture():
         )
         session.commit()
 
-    # Patch the module-level engine used by the route handlers
-    import app.main as main_module
+    original_override = app.dependency_overrides.get(get_db_engine)
+    app.dependency_overrides[get_db_engine] = lambda: engine
 
-    original_engine = main_module.db_engine
-    main_module.db_engine = engine
-
-    with TestClient(app, follow_redirects=False) as client:
-        yield client
-
-    main_module.db_engine = original_engine
-    SQLModel.metadata.drop_all(engine)
+    try:
+        with TestClient(app, follow_redirects=False) as client:
+            yield client
+    finally:
+        if original_override is None:
+            app.dependency_overrides.pop(get_db_engine, None)
+        else:
+            app.dependency_overrides[get_db_engine] = original_override
+        SQLModel.metadata.drop_all(engine)
 
 
 # --- /redirect/ tests ---

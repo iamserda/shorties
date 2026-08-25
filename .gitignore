@@ -151,3 +151,6 @@ example.db
 # ai, coding-agents
 .claude
 .claude/*
+
+# Local repository task list
+/TODO.md

@@ -38,14 +38,13 @@ if db_engine:
 # FASTAPI APP Config
 app = FastAPI(title="Shorties App")
 api_router = APIRouter()
-api_version = f"/{os.getenv('API_VERSION')}"
-if api_version not in set(["v1", "v2", "v3", "v4", "v5"]):
+api_version = str(os.getenv("API_VERSION"))
+if api_version not in {"v1", "v2", "v3", "v4", "v5"}:
     api_version = "v1"
 
-
-app.include_router(links.router, prefix=f"/{api_version}")
-app.include_router(health.router, prefix=f"/{api_version}")
-app.include_router(api_router)
+api_router.include_router(links.router)
+api_router.include_router(health.router)
+app.include_router(api_router, prefix=f"/{api_version}")
 if __name__ == "__main__":
     HOST: str = "0.0.0.0"
     PORT: int = 8001
