@@ -3,6 +3,9 @@ from __future__ import annotations
 from logging import Logger
 
 from app.alnumgen import alnum_generator
+from app.db.db_exceptions import DBEngineError
+from app.db.db_exceptions import DBSessionError
+from app.db.db_exceptions import EmptyDatabaseError
 from app.db.models.models import ShortiLink
 from app.db.session import get_db_engine
 from app.schemas.schemas import GetUrlResponseModel
@@ -14,11 +17,16 @@ from fastapi import Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import select
 from sqlmodel import Session
 
 router = APIRouter()
 logger = Logger(__name__)
+
+COMMON_DATABASE_ERROR_MESSAGE = (
+    "A server-side error occurred! It has been logged for technical review."
+)
 
 
 @router.get("/links", response_model=list[GetUrlResponseModel])
@@ -28,11 +36,18 @@ def get_all_links(
     db_engine=Depends(get_db_engine),
 ) -> list[GetUrlResponseModel]:
     results: list[GetUrlResponseModel] = []
+    db_engine_error = {
+        "name": "db-error",
+        "description": "An error occurred with the database engine.",
+    }
+    empty_database_error = {
+        "name": "empty-database-error",
+        "description": "The database currently contains no links.",
+    }
 
     try:
         if not db_engine:
-            error_dict = {"name": "db-error", "description": "Error with DB Engine!"}
-            raise ValueError(error_dict)
+            raise DBEngineError(db_engine_error)
         with Session(db_engine) as session:
             select_statement = select(ShortiLink)
             results = [
@@ -44,22 +59,43 @@ def get_all_links(
                 for shorti in session.exec(statement=select_statement).all()
             ]
             if not results:
-                error_dict = {
-                    "name": "empty-database-error",
-                    "description": "The database is currently empty!",
+                raise EmptyDatabaseError(empty_database_error)
+    except EmptyDatabaseError as empty_database_err:
+        logger.info("empty link collection: %s", empty_database_err.description)
+        return []
+    except DBEngineError as db_engine_err:
+        logger.exception("database engine error: %s", db_engine_err)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "type": db_engine_err.__class__.__name__,
+                    "description": db_engine_err.description,
+                    "status-code": 500,
+                    "message": COMMON_DATABASE_ERROR_MESSAGE,
                 }
-                raise ValueError(error_dict)
-    except ValueError as val_err:
-        error_dict = val_err.args[0]
-        if error_dict["name"] == "db-error":
-            logger.exception(f"error: {error_dict['name']}: {val_err}")
-            raise HTTPException(status_code=500, detail=error_dict)
-        elif error_dict["name"] == "empty-database-error":
-            logger.exception(f"error: {error_dict['name']}: {val_err}")
-        else:
-            raise
+            },
+        )
+    except SQLAlchemyError as sqlalchemy_err:
+        db_session_err = DBSessionError(
+            {
+                "name": "db-session-error",
+                "description": "A database session operation failed.",
+            }
+        )
+        logger.exception("database session error: %s", sqlalchemy_err)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": {
+                    "type": db_session_err.__class__.__name__,
+                    "description": db_session_err.description,
+                    "status-code": 500,
+                    "message": COMMON_DATABASE_ERROR_MESSAGE,
+                }
+            },
+        )
     except Exception as app_exception:
-        # all-in-one crapshoot for now.
         logger.exception(
             f"unknown-error: An unknown error occurred in display_all function.\nerror-detail: {app_exception}"
         )

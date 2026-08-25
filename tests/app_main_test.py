@@ -5,7 +5,9 @@ from app.db.models.models import ShortiLink
 from app.db.session import get_db_engine
 from app.main import app
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import create_engine
+from sqlmodel import delete
 from sqlmodel import Session
 from sqlmodel import SQLModel
 from sqlmodel import StaticPool
@@ -14,8 +16,8 @@ from sqlmodel import StaticPool
 TEST_DB_URL = "sqlite://"  # in-memory, discarded after each test
 
 
-@pytest.fixture(name="client")
-def client_fixture():
+@pytest.fixture(name="engine")
+def engine_fixture():
     engine = create_engine(
         TEST_DB_URL,
         connect_args={"check_same_thread": False},
@@ -23,6 +25,14 @@ def client_fixture():
     )
     SQLModel.metadata.create_all(engine)
 
+    try:
+        yield engine
+    finally:
+        SQLModel.metadata.drop_all(engine)
+
+
+@pytest.fixture(name="client")
+def client_fixture(engine):
     with Session(engine) as session:
         session.add(
             ShortiLink(
@@ -42,7 +52,41 @@ def client_fixture():
             app.dependency_overrides.pop(get_db_engine, None)
         else:
             app.dependency_overrides[get_db_engine] = original_override
-        SQLModel.metadata.drop_all(engine)
+
+
+# --- /links tests ---
+
+
+def test_get_all_links_empty_database_returns_empty_list(client, engine):
+    with Session(engine) as session:
+        session.exec(delete(ShortiLink))
+        session.commit()
+
+    response = client.get("/v1/links")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_all_links_unavailable_engine_returns_structured_error(client):
+    app.dependency_overrides[get_db_engine] = lambda: None
+
+    response = client.get("/v1/links")
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["error"]["type"] == "DBEngineError"
+
+
+def test_get_all_links_session_failure_returns_structured_error(client, monkeypatch):
+    def failing_session(_engine):
+        raise SQLAlchemyError("session failed")
+
+    monkeypatch.setattr("app.api.routes.links.Session", failing_session)
+
+    response = client.get("/v1/links")
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["error"]["type"] == "DBSessionError"
 
 
 # --- /redirect/ tests ---
