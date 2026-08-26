@@ -35,7 +35,7 @@ precommit: lint format typecheck test
 	@echo "✅ pytest-test checks passed"
 	@echo "✅ precommit(--stage-files-only) checks passed"
 
-precommit-all:
+precommit-all: precommit
 	poetry run pre-commit run --all-files
 	@echo "✅ ruff-lint checks passed"
 	@echo "✅ ruff-format checks passed"

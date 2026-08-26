@@ -33,6 +33,7 @@ Roughly in priority order, not committed to any timeline:
 - [ ] Move default persistence off in-memory/SQLite dev DB to Postgres for non-local environments
 - [ ] Flesh out `core/config.py`, `db/session.py`, `api/routes/health.py` (currently empty stubs) or remove them
 - [ ] Structured request logging / observability (metrics, tracing) beyond a flat log file
+- [ ] Make `make precommit-all` run the full pytest suite; only print the pytest success message after the tests actually pass
 - [ ] Pagination cursoring for `/links/` beyond the current fixed 20-item cap
 - [ ] Real Docker/Compose setup for local + prod parity
 - [ ] API versioning that actually works end-to-end (multiple concurrent versions, not just `/v1`)
