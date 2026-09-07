@@ -1,26 +1,29 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Annotated
 
 from app.db.db import db_engine_factory
 from dotenv import load_dotenv
 from fastapi import Depends
+from fastapi.exceptions import HTTPException
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
+
+from .db_exceptions import DBSessionError
+from .db_exceptions import DbUrlInvalidError
 
 
 load_dotenv()
 DEV_MODE: bool = os.getenv("DEV_ENV", "False") == "True"
 
 
-class DbUrlInvalidError(ValueError):
-    message: str = "Invalid DB URL was provided. Please check the URL and try again."
-
-
-class SessionError(SQLAlchemyError):
-    pass
+def log_error(err):
+    # LOGGER Object
+    logger = logging.getLogger(__name__)
+    logger.error(err)
 
 
 def get_db_url(selected_db: str = "DEV_DATABASE_URL") -> str:
@@ -35,17 +38,22 @@ def get_db_url(selected_db: str = "DEV_DATABASE_URL") -> str:
         if new_db_url is None:
             raise TypeError(f"Please check environment variables for {selected_db}")
         if len(new_db_url) == 0:
-            error = DbUrlInvalidError()
-            error.message = f"Check env vars. Make sure the value for {selected_db} is on the list of environment variables."
+            error = DbUrlInvalidError(
+                {
+                    "name": "Invalid URL Exception",
+                    "description": f"Check env vars. Make sure the value for {selected_db} is on the list of environment variables.",
+                }
+            )
             raise error
         return new_db_url
 
-    except SQLAlchemyError as db_exc:
+    except DbUrlInvalidError as db_url_exc:
         # TODO: log error for operations and development
-        print(db_exc)  # remove this
+        log_error(db_url_exc)  # remove this
         raise
-    except Exception:
+    except Exception as exc:
         # TODO: log error for operations and development
+        log_error(exc)
         raise
 
 
@@ -57,18 +65,21 @@ def get_session(db_engine: Annotated[Engine, Depends(get_db_engine)]):
     try:
         with Session(db_engine) as session:
             yield session
-    except SessionError as session_exc:
-        # TODO: log error for operations and development
-        print(session_exc)  # remove this
-        raise
     except SQLAlchemyError as db_exc:
-        # TODO: log error for operations and development
-        print(db_exc)  # remove this
-        raise
-    except Exception as _exc:
-        # TODO: log error for operations and development
-        print(_exc)  # remove this
-        raise
+        log_error(db_exc)
+        session_err = DBSessionError(
+            {
+                "name": "db-session-error",
+                "description": "A database session operation failed.",
+            }
+        )
+        raise HTTPException(status_code=500, detail=str(session_err)) from db_exc
+    except Exception as exc:
+        log_error(exc)
+        raise HTTPException(
+            status_code=500,
+            detail="A server-side error occurred while establishing a database session.",
+        ) from exc
 
 
 if __name__ == "__main__":
