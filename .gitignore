@@ -4,7 +4,7 @@
 #workspace
 .vscode
 temp.py
-
+**/*.code-workspace
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
