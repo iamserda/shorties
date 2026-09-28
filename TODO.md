@@ -1,11 +1,10 @@
 # Shorties TODO
 
-Personal repository checklist. Status was reviewed against local branch
-`new_feature_00001` at commit `3f9cc85`.
+Personal repository checklist. Status was reviewed against local branch `new_feature_00001` at commit `3f9cc85`.
 
 ## Fix urgently
 
-- [ ] Require strict HTTP/HTTPS URL validation for submitted destinations; remove the `AnyHttpUrl | str` validation bypass and add redirect-abuse tests.
+- [x] Require strict HTTP/HTTPS URL validation for submitted destinations; remove the `AnyHttpUrl | str` validation bypass and add redirect-abuse tests.
 - [ ] Add authentication and authorization for write operations, especially link deletion; the public list endpoint currently exposes every key needed to delete a link.
 - [ ] Add rate limiting and abuse protection for link creation and deletion.
 - [x] Fail fast when the configured database URL is missing or empty instead of silently using an in-memory database.
