@@ -11,7 +11,7 @@ def test_db_engine_factory_creates_engine_for_valid_url():
 
 def test_db_engine_factory_raises_type_error_for_non_string_url():
     with pytest.raises(TypeError):
-        db_engine_factory(db_url=None)
+        db_engine_factory(db_url=None)  # type: ignore[arg-type]
 
 
 def test_db_engine_factory_raises_value_error_for_empty_url():

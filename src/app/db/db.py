@@ -5,66 +5,33 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi.exceptions import HTTPException
+from pydantic import AnyUrl
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import create_engine
 from sqlmodel import SQLModel
 
-from .db_exceptions import DBEngineError
-from .db_exceptions import DbUrlInvalidError
 
+def db_engine_factory(db_url: AnyUrl | str, dev_mode: bool = False):
+    if not isinstance(db_url, str):
+        raise TypeError("Invalid type for Database URL. Expecting a string...")
 
-def log_error(err: Exception, err_type: str = "error"):
-    """Log an exception at the requested logging level."""
-    logger = logging.getLogger(__name__)
-    log_methods = {
-        "debug": logger.debug,
-        "info": logger.info,
-        "warning": logger.warning,
-        "error": logger.error,
-        "exception": logger.exception,
-        "critical": logger.critical,
-    }
-    level = err_type.lower()
-    log_method = log_methods.get(level, logger.error)
-    if level == "exception":
-        log_method(err, exc_info=True)
-    else:
-        log_method(err)
-
-
-def db_engine_factory(db_url: str | None, dev_mode: bool = False):
+    if db_url == "":
+        raise ValueError(
+            "The Database URL was not provided. A valid Database URL is required."
+        )
     try:
-        if not isinstance(db_url, str):
-            type_err = TypeError("Invalid type for Database URL. Expecting a string...")
-            raise type_err
-        if db_url == "":
-            val_err = DbUrlInvalidError(
-                {
-                    "name": "invalid-url-error",
-                    "description": "A URL was not provided. A valid URL is required.",
-                },
-                message="",
-            )
-            raise val_err
-        return create_engine(url=db_url, echo=dev_mode)
-
-    except TypeError as type_err:
-        log_error(type_err)
-        raise HTTPException(status_code=400, detail=str(type_err)) from type_err
-
-    except DbUrlInvalidError as db_url_err:
-        log_error(db_url_err)
-        raise HTTPException(status_code=400, detail=str(db_url_err)) from db_url_err
-    except (DBEngineError, SQLAlchemyError) as sql_err:
-        log_error(sql_err, err_type="exception")
-        raise HTTPException(status_code=400, detail=str(sql_err)) from sql_err
+        new_db_engine = create_engine(url=db_url, echo=dev_mode)
+        return new_db_engine
+    except SQLAlchemyError as err:
+        logging.exception(
+            "sql_alchemy_error -> function db_engine_factory: %s", err, exc_info=True
+        )
+        raise
     except Exception as gen_exc:
-        log_error(gen_exc, err_type="exception")
-        raise HTTPException(
-            status_code=400,
-            detail=str("Bad Request. Please check your submitted data and try again!"),
-        ) from gen_exc
+        logging.exception(
+            "general_error -> function db_engine_factory: %s", gen_exc, exc_info=True
+        )
+        raise
 
 
 def create_dev_db() -> None:
@@ -81,19 +48,30 @@ def create_dev_db() -> None:
     LOGS_DIR = APP_DIR.joinpath("logs")
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     LOGFILE_PATH = LOGS_DIR.joinpath("db.log")
+    DATABASE_URL = os.getenv("DEV_DATABASE_URL")
+    DATABASE_URL = DATABASE_URL if DATABASE_URL else ""
+    DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
+
     logging.basicConfig(
         filename=LOGFILE_PATH,
         level=logging.DEBUG,
         datefmt="%m/%d/%Y %I:%M:%S %p",
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    DATABASE_URL = os.getenv("DEV_DATABASE_URL")
-    DEV_ENV: bool = os.getenv("DEV_ENV", "False") == "True"
-    db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
+    logger = logging.getLogger(__name__)
+
     try:
+        db_engine = db_engine_factory(db_url=DATABASE_URL, dev_mode=DEV_ENV)
         SQLModel.metadata.create_all(db_engine)  # will create a DB without any table
     except SQLAlchemyError as err:
-        log_error(err)
+        logger.exception(
+            "sql_alchemy_error -> function create_dev_db: %s", err, exc_info=True
+        )
+        raise
+    except Exception as gen_exc:
+        logger.exception(
+            "general_error -> function create_dev_db: %s", gen_exc, exc_info=True
+        )
         raise
 
 

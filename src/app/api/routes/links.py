@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from logging import Logger
+import logging
 
 from app.alnumgen import alnum_generator
 from app.db.db_exceptions import DBEngineError
@@ -15,6 +15,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi.responses import RedirectResponse
+from pydantic import HttpUrl
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.exc import SQLAlchemyError
@@ -22,7 +23,7 @@ from sqlmodel import select
 from sqlmodel import Session
 
 router = APIRouter()
-logger = Logger(__name__)
+logger = logging.getLogger(__name__)
 
 COMMON_DATABASE_ERROR_MESSAGE = (
     "A server-side error occurred! It has been logged for technical review."
@@ -37,7 +38,7 @@ def get_all_links(
 ) -> list[GetUrlResponseModel]:
     results: list[GetUrlResponseModel] = []
     db_engine_error = {
-        "name": "db-error",
+        "name": "db-engine-error",
         "description": "An error occurred with the database engine.",
     }
     empty_database_error = {
@@ -53,16 +54,17 @@ def get_all_links(
             results = [
                 GetUrlResponseModel(
                     shorti_key=shorti.shorti_key,
-                    shorti_url=shorti.shorti_url,
+                    shorti_url=HttpUrl(shorti.shorti_url),
                     shorti_brand=shorti.brand,
                 )
                 for shorti in session.exec(statement=select_statement).all()
             ]
             if not results:
                 raise EmptyDatabaseError(empty_database_error)
+
     except EmptyDatabaseError as empty_database_err:
-        logger.info("empty link collection: %s", empty_database_err.description)
-        return []
+        logger.info("empty link collection: %s", empty_database_err.error_description)
+
     except DBEngineError as db_engine_err:
         logger.exception("database engine error: %s", db_engine_err)
         raise HTTPException(
@@ -70,7 +72,7 @@ def get_all_links(
             detail={
                 "error": {
                     "type": db_engine_err.__class__.__name__,
-                    "description": db_engine_err.description,
+                    "description": db_engine_err.error_description,
                     "status-code": 500,
                     "message": COMMON_DATABASE_ERROR_MESSAGE,
                 }
@@ -89,7 +91,7 @@ def get_all_links(
             detail={
                 "error": {
                     "type": db_session_err.__class__.__name__,
-                    "description": db_session_err.description,
+                    "description": db_session_err.error_description,
                     "status-code": 500,
                     "message": COMMON_DATABASE_ERROR_MESSAGE,
                 }
@@ -143,18 +145,18 @@ def get_url(shorti_key: str, db_engine=Depends(get_db_engine)) -> RedirectRespon
         raise HTTPException(status_code=err.status_code, detail=response)
 
 
-@router.post("/create/")
+@router.post("/create")
 def create_url(
     url_item: NewUrlSubmissionModel, db_engine=Depends(get_db_engine)
 ) -> list[GetUrlResponseModel]:
     try:
-        if url_item is None or not len(url_item.shorti_url):
+        if url_item is None or not len(url_item.url):
             raise HTTPException(
                 status_code=404,
                 detail="Invalid submission, either url or both url and brand are missing!",
             )
 
-        if url_item and len(url_item.shorti_url) <= 3:
+        if url_item and len(url_item.url) <= 3:
             raise HTTPException(
                 status_code=404,
                 detail="Invalid submission, missing url. We cannot create a new shorti without a valid url input.",
@@ -166,8 +168,8 @@ def create_url(
             validated_shorti = ShortiLink.model_validate(
                 {
                     "shorti_key": key,
-                    "shorti_url": url_item.shorti_url,
-                    "brand": url_item.shorti_brand,
+                    "shorti_url": str(url_item.url),
+                    "brand": url_item.brand,
                 }
             )
             session.add(validated_shorti)
@@ -240,7 +242,7 @@ def delete_a_shorti(shorti_key: str, db_engine=Depends(get_db_engine)):
                 for result in lookup_results:
                     new_response_item = GetUrlResponseModel(
                         shorti_key=result.shorti_key,
-                        shorti_url=result.shorti_url,
+                        shorti_url=HttpUrl(result.shorti_url),
                         shorti_brand=result.brand,
                     )
                     deleted_items.append(new_response_item)
