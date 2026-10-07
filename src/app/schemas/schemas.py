@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from pydantic import AnyHttpUrl
 from pydantic import BaseModel
+from pydantic import HttpUrl
 
 
 class NewUrlSubmissionModel(BaseModel):
-    shorti_brand: str | None = None
-    shorti_url: AnyHttpUrl | str = "https://i.imgur.com/Secssr2.png"
-    redirect_code: Literal[301, 302, 307] = 307
-
-    def __str__(self):
-        return f"brand: {self.shorti_brand}, url: {self.shorti_url}"
+    brand: str | None
+    url: HttpUrl = HttpUrl("https://i.imgur.com/Secssr2.png")
 
 
 class GetURLRequestModel(BaseModel):
@@ -21,5 +15,5 @@ class GetURLRequestModel(BaseModel):
 
 class GetUrlResponseModel(BaseModel):
     shorti_key: str
-    shorti_url: str
+    shorti_url: HttpUrl
     shorti_brand: str | None
